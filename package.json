@@ -1,0 +1,17 @@
+{
+  "name": "recruiter-call-app",
+  "version": "1.0.0",
+  "description": "A browser-based calling app with live transcription. Recruiters can dial candidates directly from their browser, see a live transcript as the conversation happens, and get recordings + transcripts saved automatically.",
+  "main": "setup.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "twilio": "^5.13.1"
+  }
+}
