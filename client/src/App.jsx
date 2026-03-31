@@ -8,7 +8,7 @@ import PerCallQAReport from './components/PerCallQAReport';
 import CandidateEvaluationReport from './components/CandidateEvaluationReport';
 import InterviewPanel from './components/InterviewPanel';
 
-const BACKEND_URL = 'http://localhost:3000';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
 export default function App() {
   const [device, setDevice] = useState(null);
