@@ -320,8 +320,8 @@ function NudgeCard({ nudge }) {
 }
 
 // ─── MAIN REPORT ─────────────────────────────────────────────────────────────
-export default function PerCallQAReport() {
-  const { meta, summary, scorecard, redFlags, nudges } = reportData;
+export default function PerCallQAReport({ reportData: propData }) {
+  const { meta, summary, scorecard, redFlags, nudges } = propData ?? reportData;
   const reportRef = useRef(null);
   const [exporting, setExporting] = useState(false);
 

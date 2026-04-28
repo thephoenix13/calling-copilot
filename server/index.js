@@ -9,6 +9,7 @@ const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const { db, seedUsers } = require('./db');
 
 // ── App setup ──────────────────────────────────────────────────────────────
 const app = express();
@@ -41,9 +42,16 @@ const activeCalls = {};
 const deepgramClient = createClient(process.env.DEEPGRAM_API_KEY);
 
 // ── Routes ──────────────────────────────────────────────────────────────────
+app.use('/auth',  require('./routes/auth'));
 app.use('/token', require('./routes/token'));
 app.use('/voice', require('./routes/voice'));
-app.use('/ai', require('./routes/ai'));
+app.use('/ai',    require('./routes/ai'));
+app.use('/calls',      require('./routes/calls'));
+app.use('/admin',      require('./routes/admin'));
+app.use('/jobs',        require('./routes/jobs'));
+app.use('/candidates',  require('./routes/candidates'));
+app.use('/enhance-jd',  require('./routes/enhance-jd'));
+app.use('/sessions',    require('./routes/sessions'));
 
 // ── Recording status webhook ────────────────────────────────────────────────
 app.post('/recording-status', async (req, res) => {
@@ -64,6 +72,14 @@ app.post('/recording-status', async (req, res) => {
       const filepath = path.join(RECORDINGS_DIR, filename);
       fs.writeFileSync(filepath, Buffer.from(response.data));
       console.log(`✅ Recording saved: ${filepath}`);
+
+      // Update call record in DB
+      if (CallSid) {
+        db.prepare(
+          `UPDATE calls SET recording_filename = ?, recording_sid = ?, status = 'completed', ended_at = datetime('now')
+           WHERE call_sid = ?`
+        ).run(filename, RecordingSid || null, CallSid);
+      }
     } catch (err) {
       console.error('❌ Failed to save recording:', err.message);
     }
@@ -173,17 +189,39 @@ app.ws('/stream', (ws, req) => {
           if (state.conn) try { state.conn.requestClose(); } catch (_) {}
         });
 
-        // Save transcript to file
+        // Save transcript to flat file (backup) and to DB
         if (callSid && activeCalls[callSid]?.transcript.length > 0) {
           const lines = activeCalls[callSid].transcript;
-          const content = lines.join('\n');
-          const filename = `${callSid}_${Date.now()}.txt`;
-          const filepath = path.join(TRANSCRIPTS_DIR, filename);
+
+          // Flat file backup
           try {
-            fs.writeFileSync(filepath, content, 'utf8');
-            console.log(`📝 Transcript saved: ${filepath}`);
+            const content = lines.join('\n');
+            const filename = `${callSid}_${Date.now()}.txt`;
+            fs.writeFileSync(path.join(TRANSCRIPTS_DIR, filename), content, 'utf8');
+            console.log(`📝 Transcript saved: ${filename}`);
           } catch (err) {
-            console.error('Failed to save transcript:', err.message);
+            console.error('Failed to save transcript file:', err.message);
+          }
+
+          // DB — insert transcript rows if call record exists
+          try {
+            const callRow = db.prepare('SELECT id FROM calls WHERE call_sid = ?').get(callSid);
+            if (callRow) {
+              const insertLine = db.prepare(
+                'INSERT INTO transcripts (call_id, seq, speaker, text) VALUES (?, ?, ?, ?)'
+              );
+              // Parse "[Speaker]: text" format
+              const insertMany = db.transaction((entries) => {
+                entries.forEach((line, idx) => {
+                  const match = line.match(/^\[([^\]]+)\]:\s*(.+)$/);
+                  if (match) insertLine.run(callRow.id, idx, match[1], match[2]);
+                });
+              });
+              insertMany(lines);
+              console.log(`💾 Saved ${lines.length} transcript lines to DB for ${callSid}`);
+            }
+          } catch (err) {
+            console.error('Failed to save transcript to DB:', err.message);
           }
         }
 
@@ -216,10 +254,13 @@ io.on('connection', (socket) => {
 
 // ── Start server ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
+  await seedUsers();
   console.log(`\n🚀 Server running at http://localhost:${PORT}`);
   console.log(`   Token endpoint:     POST http://localhost:${PORT}/token`);
   console.log(`   Voice webhook:      POST http://localhost:${PORT}/voice`);
   console.log(`   Recording webhook:  POST http://localhost:${PORT}/recording-status`);
-  console.log(`   Media stream WS:    ws://localhost:${PORT}/stream\n`);
+  console.log(`   Media stream WS:    ws://localhost:${PORT}/stream`);
+  console.log(`   Auth:               POST http://localhost:${PORT}/auth/login`);
+  console.log(`   Calls API:          http://localhost:${PORT}/calls\n`);
 });

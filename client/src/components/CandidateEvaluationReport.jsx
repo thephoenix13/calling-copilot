@@ -312,8 +312,8 @@ function ConcernRow({ c }) {
 }
 
 // ─── MAIN REPORT ──────────────────────────────────────────────────────────────
-export default function CandidateEvaluationReport() {
-  const { meta, verdict, technical, behavioral, strengths, concerns, highlights, compensation, recommendation } = reportData;
+export default function CandidateEvaluationReport({ reportData: propData }) {
+  const { meta, verdict, technical, behavioral, strengths, concerns, highlights, compensation, recommendation } = propData ?? reportData;
   const reportRef = useRef(null);
   const [exporting, setExporting] = useState(false);
 

@@ -21,7 +21,7 @@ export default function Transcript({ entries, callStatus, callingNumber }) {
             <span className="transcript-number">{callingNumber}</span>
           )}
         </div>
-        {callStatus === 'in-call' && (
+        {(callStatus === 'in-call' || callStatus === 'sim-call') && (
           <span className="recording-badge">● LIVE</span>
         )}
         {callStatus === 'ended' && entries.length > 0 && (
@@ -39,6 +39,9 @@ export default function Transcript({ entries, callStatus, callingNumber }) {
           <p className="transcript-placeholder">Waiting for call to connect…</p>
         )}
         {isEmpty && callStatus === 'in-call' && (
+          <p className="transcript-placeholder">Listening… speak to see transcript</p>
+        )}
+        {isEmpty && (callStatus === 'sim-call' || callStatus === 'sim-ended') && (
           <p className="transcript-placeholder">Listening… speak to see transcript</p>
         )}
         {isEmpty && callStatus === 'ended' && (

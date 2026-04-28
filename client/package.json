@@ -10,9 +10,13 @@
   },
   "dependencies": {
     "@twilio/voice-sdk": "^2.10.0",
+    "docx": "^9.6.1",
+    "file-saver": "^2.0.5",
     "html2pdf.js": "^0.14.0",
+    "jspdf": "^4.2.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-markdown": "^10.1.0",
     "socket.io-client": "^4.7.5"
   },
   "devDependencies": {

@@ -19,8 +19,8 @@ export default function Dialpad({
 
   const isIdle = callStatus === 'idle';
   const isConnecting = callStatus === 'connecting';
-  const isInCall = callStatus === 'in-call';
-  const isEnded = callStatus === 'ended';
+  const isInCall = callStatus === 'in-call' || callStatus === 'sim-call';
+  const isEnded = callStatus === 'ended' || callStatus === 'sim-ended';
   // Need at least + and a few digits to be dialable
   const canCall = isIdle && phoneNumber.trim().length > 4;
 

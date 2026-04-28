@@ -1,0 +1,104 @@
+import { useEffect, useState } from 'react';
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+
+const NAV_CARDS = [
+  {
+    id: 'jobs',
+    icon: '💼',
+    title: 'Job Management',
+    desc: 'Create and manage job openings. Define required skills, experience bands, and salary ranges that feed into the agentic pipeline.',
+    cta: 'Open',
+  },
+  {
+    id: 'candidates',
+    icon: '👤',
+    title: 'Candidate Database',
+    desc: 'Build and maintain your talent pool. Add candidates manually or by uploading resumes — Claude auto-fills the profile.',
+    cta: 'Open',
+  },
+  {
+    id: 'jd-enhancer',
+    icon: '✨',
+    title: 'JD Enhancer',
+    desc: 'Paste a job description and generate a formatted JD, recruiter brief, clarification questions, reachout messages, and sourcing keywords — all in one click.',
+    cta: 'Open',
+  },
+  {
+    id: 'sessions',
+    icon: '🔄',
+    title: 'Pipeline Sessions',
+    desc: 'Run a guided 7-step recruitment pipeline — from JD enhancement to final candidate selection.',
+    cta: 'Open',
+  },
+];
+
+export default function AgenticHome({ authFetch, isLight, onToggleTheme, onLogout, onNav, onBackToDashboard }) {
+  const [stats, setStats] = useState({ jobs: null, candidates: null });
+
+  useEffect(() => {
+    Promise.all([
+      authFetch(`${BACKEND_URL}/jobs`).then(r => r.json()).catch(() => null),
+      authFetch(`${BACKEND_URL}/candidates`).then(r => r.json()).catch(() => null),
+    ]).then(([jobsData, candidatesData]) => {
+      setStats({
+        jobs:       jobsData?.jobs?.length       ?? 0,
+        candidates: candidatesData?.candidates?.length ?? 0,
+      });
+    });
+  }, [authFetch]);
+
+  return (
+    <div className={`app${isLight ? ' light' : ''}`}>
+      <header className="app-header">
+        <div className="header-left">
+          <button className="report-btn" onClick={onBackToDashboard}>← Dashboard</button>
+          <span className="logo">🤖</span>
+          <h1>Agentic Mode</h1>
+        </div>
+        <div className="header-right">
+          <button className="theme-toggle-btn" onClick={onToggleTheme}>
+            {isLight ? '🌙 Dark' : '☀️ Light'}
+          </button>
+          <button className="report-btn" onClick={onLogout}>Sign out</button>
+        </div>
+      </header>
+
+      <div className="ag-home-body">
+        {/* Stats strip */}
+        <div className="ag-stats-strip">
+          <div className="ag-stat-card">
+            <span className="ag-stat-value">{stats.jobs ?? '—'}</span>
+            <span className="ag-stat-label">Active Jobs</span>
+          </div>
+          <div className="ag-stat-card">
+            <span className="ag-stat-value">{stats.candidates ?? '—'}</span>
+            <span className="ag-stat-label">Candidates</span>
+          </div>
+          <div className="ag-stat-card">
+            <span className="ag-stat-value">—</span>
+            <span className="ag-stat-label">Active Sessions</span>
+          </div>
+        </div>
+
+        {/* Module cards */}
+        <div className="ag-module-cards">
+          {NAV_CARDS.map(card => (
+            <div
+              key={card.id}
+              className={`ag-module-card${card.disabled ? ' ag-module-card--disabled' : ''}`}
+              onClick={() => !card.disabled && onNav(card.id)}
+            >
+              <div className="ag-card-icon">{card.icon}</div>
+              <div className="ag-card-title">{card.title}</div>
+              <p className="ag-card-desc">{card.desc}</p>
+              <div className={`ag-card-cta${card.disabled ? ' ag-card-cta--muted' : ''}`}>
+                {card.cta} {!card.disabled && '→'}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

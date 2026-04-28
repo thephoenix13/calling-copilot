@@ -2,10 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
-export default function InterviewPanel({ transcript, callStatus }) {
+export default function InterviewPanel({ transcript, callStatus, initialJd, initialResume }) {
   // ── JD / Resume inputs ───────────────────────────────────────────────────
-  const [jdText, setJdText] = useState('');
-  const [resumeText, setResumeText] = useState('');
+  const [jdText, setJdText] = useState(initialJd || '');
+  const [resumeText, setResumeText] = useState(initialResume || '');
   const [jdFile, setJdFile] = useState(null);
   const [resumeFile, setResumeFile] = useState(null);
 
@@ -57,7 +57,7 @@ export default function InterviewPanel({ transcript, callStatus }) {
 
   // ── Live suggestions: debounce on transcript updates ────────────────────
   const fetchSuggestions = useCallback(async () => {
-    if (callStatus !== 'in-call' && callStatus !== 'ended') return;
+    if (callStatus !== 'in-call' && callStatus !== 'sim-call' && callStatus !== 'sim-ended' && callStatus !== 'ended') return;
     const finalTranscript = transcript.filter(e => e.isFinal !== false);
     if (finalTranscript.length === 0) return;
     setSuggestLoading(true);
@@ -243,6 +243,8 @@ export default function InterviewPanel({ transcript, callStatus }) {
           <div className="ip-suggestions-empty">
             {callStatus === 'in-call'
               ? 'Suggestions will appear as the candidate speaks…'
+              : callStatus === 'sim-call'
+              ? 'Suggestions will appear as the candidate responds…'
               : 'Start a call to see live suggestions.'}
           </div>
         )}
