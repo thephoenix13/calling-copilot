@@ -31,6 +31,14 @@ const NAV_CARDS = [
     desc: 'Run a guided 7-step recruitment pipeline — from JD enhancement to final candidate selection.',
     cta: 'Open',
   },
+  {
+    id: 'pofu',
+    icon: '🎯',
+    title: 'Post Offer Follow-Up',
+    desc: 'Autonomously engage candidates between offer acceptance and joining day. AI-powered email sequences, risk scoring, and drop prevention.',
+    cta: 'Open',
+    badge: 'Beta',
+  },
 ];
 
 export default function AgenticHome({ authFetch, isLight, onToggleTheme, onLogout, onNav, onBackToDashboard }) {
@@ -92,6 +100,9 @@ export default function AgenticHome({ authFetch, isLight, onToggleTheme, onLogou
               <div className="ag-card-icon">{card.icon}</div>
               <div className="ag-card-title">{card.title}</div>
               <p className="ag-card-desc">{card.desc}</p>
+              {card.badge && (
+                <span style={{ fontSize: 10, background: 'var(--orange-dim)', color: 'var(--orange)', border: '1px solid var(--orange-border)', borderRadius: 4, padding: '1px 6px', fontWeight: 600, letterSpacing: '0.03em', marginBottom: 6, display: 'inline-block' }}>{card.badge}</span>
+              )}
               <div className={`ag-card-cta${card.disabled ? ' ag-card-cta--muted' : ''}`}>
                 {card.cta} {!card.disabled && '→'}
               </div>

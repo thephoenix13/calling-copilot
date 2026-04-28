@@ -151,6 +151,43 @@ db.exec(`
     UNIQUE(session_id, candidate_id)
   );
   CREATE INDEX IF NOT EXISTS idx_session_candidates_session_id ON session_candidates(session_id);
+
+  CREATE TABLE IF NOT EXISTS pofu_candidates (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id          INTEGER NOT NULL REFERENCES users(id),
+    session_id       INTEGER REFERENCES sessions(id),
+    candidate_id     INTEGER REFERENCES candidates(id),
+    job_id           INTEGER REFERENCES jobs(id),
+    candidate_name   TEXT NOT NULL,
+    candidate_email  TEXT NOT NULL,
+    role_title       TEXT,
+    company_name     TEXT,
+    doj              TEXT,
+    state            TEXT NOT NULL DEFAULT 'offer_accepted'
+                     CHECK(state IN ('offer_accepted','resigned','bgv','confirmed','joined','dropped')),
+    risk_score       INTEGER NOT NULL DEFAULT 30,
+    risk_level       TEXT NOT NULL DEFAULT 'low' CHECK(risk_level IN ('low','medium','high')),
+    last_email_at    TEXT,
+    last_response_at TEXT,
+    auto_paused      INTEGER NOT NULL DEFAULT 0,
+    notes            TEXT,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_pofu_candidates_user ON pofu_candidates(user_id);
+
+  CREATE TABLE IF NOT EXISTS pofu_emails (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    pofu_candidate_id INTEGER NOT NULL REFERENCES pofu_candidates(id) ON DELETE CASCADE,
+    direction         TEXT NOT NULL DEFAULT 'outbound' CHECK(direction IN ('outbound','inbound')),
+    trigger_reason    TEXT,
+    subject           TEXT,
+    body              TEXT,
+    ai_generated      INTEGER NOT NULL DEFAULT 1,
+    ai_analysis       TEXT,
+    sent_at           TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_pofu_emails_candidate ON pofu_emails(pofu_candidate_id);
 `);
 
 async function seedUsers() {

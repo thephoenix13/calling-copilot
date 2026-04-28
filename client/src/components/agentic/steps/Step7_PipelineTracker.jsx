@@ -2,6 +2,8 @@ import { useState } from 'react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
+const POFU_BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+
 const COLUMNS = [
   { key: 'L1',       label: 'L1 Interview' },
   { key: 'L2',       label: 'L2 Interview' },
@@ -14,6 +16,12 @@ const NEXT_LEVEL = { L1: 'L2', L2: 'L3', L3: 'selected' };
 export default function Step7_PipelineTracker({ session, authFetch, onRefresh }) {
   const [feedback, setFeedback]   = useState({});
   const [saving, setSaving]       = useState({});
+
+  // POFU enrollment modal
+  const [pofuModal, setPofuModal] = useState(null); // sc object
+  const [pofuDoj, setPofuDoj]     = useState('');
+  const [pofuEnrolling, setPofuEnrolling] = useState(false);
+  const [pofuMsg, setPofuMsg]     = useState('');
 
   const proceeded = (session.candidates || []).filter(c => c.decision === 'proceed');
 
@@ -46,6 +54,35 @@ export default function Step7_PipelineTracker({ session, authFetch, onRefresh })
 
   const handleHold   = (sc) => save(sc, { pipeline_status: 'hold'   });
   const handleReject = (sc) => save(sc, { pipeline_status: 'reject'  });
+
+  const handleEnrollPOFU = async () => {
+    if (!pofuModal) return;
+    setPofuEnrolling(true);
+    setPofuMsg('');
+    try {
+      const job = session.job || {};
+      await authFetch(`${POFU_BACKEND}/pofu`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidate_name:  pofuModal.candidate_name,
+          candidate_email: pofuModal.candidate_email || '',
+          role_title:      job.title || session.job_title || '',
+          company_name:    job.company_name || '',
+          doj:             pofuDoj || null,
+          session_id:      session.id,
+          candidate_id:    pofuModal.candidate_id,
+          job_id:          session.job_id,
+        }),
+      });
+      setPofuMsg('Enrolled in POFU!');
+      setTimeout(() => { setPofuModal(null); setPofuMsg(''); setPofuDoj(''); }, 1500);
+    } catch (err) {
+      setPofuMsg('Failed to enrol. Please try again.');
+    } finally {
+      setPofuEnrolling(false);
+    }
+  };
   const handleFeedbackSave = (sc) => {
     const text = feedback[sc.id] ?? sc.pipeline_feedback ?? '';
     save(sc, { pipeline_feedback: text });
@@ -125,6 +162,14 @@ export default function Step7_PipelineTracker({ session, authFetch, onRefresh })
                         {(feedback[sc.id] != null && feedback[sc.id] !== sc.pipeline_feedback) && (
                           <button className="sw-card-btn sw-card-btn--save" onClick={() => handleFeedbackSave(sc)} disabled={saving[sc.id]}>Save Notes</button>
                         )}
+                        <button
+                          className="sw-card-btn"
+                          style={{ background: 'var(--orange-dim)', color: 'var(--orange)', borderColor: 'var(--orange-border)' }}
+                          onClick={() => { setPofuModal(sc); setPofuDoj(''); setPofuMsg(''); }}
+                          disabled={saving[sc.id]}
+                        >
+                          🎯 Move to POFU
+                        </button>
                       </div>
                     )}
                   </div>
@@ -146,6 +191,35 @@ export default function Step7_PipelineTracker({ session, authFetch, onRefresh })
                 <button className="ag-btn ag-btn--ghost ag-btn--sm" onClick={() => save(sc, { pipeline_status: 'pending' })}>Restore</button>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* POFU enrolment modal */}
+      {pofuModal && (
+        <div className="ag-modal-overlay" onClick={() => setPofuModal(null)}>
+          <div className="ag-modal" style={{ width: 440 }} onClick={e => e.stopPropagation()}>
+            <h3 className="ag-modal-title">Move to POFU</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 16 }}>
+              Enrol <strong>{pofuModal.candidate_name}</strong> in Post Offer Follow-Up. The AI will automatically send engagement emails until they join.
+            </p>
+            <label style={{ fontSize: 12, color: 'var(--text-2)', display: 'block', marginBottom: 4 }}>Date of Joining (optional)</label>
+            <input
+              type="date"
+              className="ag-input"
+              value={pofuDoj}
+              onChange={e => setPofuDoj(e.target.value)}
+              style={{ marginBottom: 16 }}
+            />
+            {pofuMsg && (
+              <div style={{ fontSize: 13, color: pofuMsg.startsWith('Failed') ? '#f87171' : '#10b981', marginBottom: 12 }}>{pofuMsg}</div>
+            )}
+            <div className="ag-modal-actions">
+              <button className="ag-btn ag-btn--ghost" onClick={() => setPofuModal(null)}>Cancel</button>
+              <button className="ag-btn ag-btn--primary" onClick={handleEnrollPOFU} disabled={pofuEnrolling}>
+                {pofuEnrolling ? 'Enrolling…' : '🎯 Enrol in POFU'}
+              </button>
+            </div>
           </div>
         </div>
       )}

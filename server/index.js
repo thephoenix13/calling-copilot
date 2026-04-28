@@ -52,6 +52,7 @@ app.use('/jobs',        require('./routes/jobs'));
 app.use('/candidates',  require('./routes/candidates'));
 app.use('/enhance-jd',  require('./routes/enhance-jd'));
 app.use('/sessions',    require('./routes/sessions'));
+app.use('/pofu',        require('./routes/pofu'));
 
 // ── Recording status webhook ────────────────────────────────────────────────
 app.post('/recording-status', async (req, res) => {
@@ -250,6 +251,14 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log(`💻 Frontend disconnected: ${socket.id}`);
   });
+});
+
+// ── POFU Scheduler (runs every 6 hours) ──────────────────────────────────────
+const cron = require('node-cron');
+const { runSchedulerCycle } = require('./utils/pofu-engine');
+cron.schedule('0 */6 * * *', () => {
+  console.log('[POFU Scheduler] Running cycle…');
+  runSchedulerCycle().catch(err => console.error('[POFU Scheduler] Error:', err.message));
 });
 
 // ── Start server ─────────────────────────────────────────────────────────────
