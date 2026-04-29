@@ -81,6 +81,17 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
   const [extracting, setExtracting]   = useState(false);
   const fileRef = useRef(null);
 
+  // Jobs dropdown
+  const [jobs, setJobs]               = useState([]);
+  const [selectedJobId, setSelectedJobId] = useState('');
+
+  useEffect(() => {
+    authFetch(`${BACKEND_URL}/jobs`)
+      .then(r => r.json())
+      .then(d => setJobs((d.jobs || []).filter(j => j.status !== 'closed')))
+      .catch(() => {});
+  }, [authFetch]);
+
   // Results
   const [results, setResults]         = useState({});
   const [parsedJob, setParsedJob]     = useState(null);
@@ -108,6 +119,33 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
   useEffect(() => {
     localStorage.setItem(LS_SCRIPT_KEY, companyScript);
   }, [companyScript]);
+
+  // ── Job select ─────────────────────────────────────────────────────────
+  const handleJobSelect = (e) => {
+    const id = e.target.value;
+    setSelectedJobId(id);
+    if (!id) return;
+    const job = jobs.find(j => String(j.id) === id);
+    if (!job) return;
+    const parts = [
+      `Role: ${job.title}`,
+      job.client_name   ? `Client: ${job.client_name}`   : '',
+      job.department    ? `Department: ${job.department}` : '',
+      job.location      ? `Location: ${job.location}`     : '',
+      job.employment_type ? `Type: ${job.employment_type}` : '',
+      (job.experience_min != null || job.experience_max != null)
+        ? `Experience: ${job.experience_min ?? ''}–${job.experience_max ?? ''} years` : '',
+      (job.salary_min != null || job.salary_max != null)
+        ? `Budget: ₹${job.salary_min ?? ''}–${job.salary_max ?? ''} LPA` : '',
+      job.required_skills?.length
+        ? `Required Skills: ${job.required_skills.join(', ')}` : '',
+      job.preferred_skills?.length
+        ? `Preferred Skills: ${job.preferred_skills.join(', ')}` : '',
+      '',
+      job.description || '',
+    ].filter(l => l !== undefined && l !== null);
+    setJdText(parts.filter(Boolean).join('\n'));
+  };
 
   // ── File upload ────────────────────────────────────────────────────────
   const handleFile = async (e) => {
@@ -542,28 +580,68 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
 
             {/* JD field */}
             <div className="jde-field">
-              <div className="jde-field-header">
-                <label className="jde-label">Job Description</label>
-                <button
-                  className="ag-btn ag-btn--ghost ag-btn--sm"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={extracting}
-                >
-                  {extracting ? '⟳ Extracting…' : '📎 Upload PDF / DOCX'}
-                </button>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".pdf,.docx,.txt"
-                  style={{ display: 'none' }}
-                  onChange={handleFile}
-                />
+              <label className="jde-label">Job Description</label>
+
+              {/* Quick-fill row */}
+              <div className="jde-quickfill">
+                {/* Select from Jobs */}
+                <div className="jde-quickfill-item">
+                  <span className="jde-quickfill-label">Select job</span>
+                  <select
+                    className="ag-input jde-job-select"
+                    value={selectedJobId}
+                    onChange={handleJobSelect}
+                  >
+                    <option value="">— choose from Job Management —</option>
+                    {jobs.map(j => (
+                      <option key={j.id} value={j.id}>
+                        {j.title}{j.client_name ? ` · ${j.client_name}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <span className="jde-quickfill-or">or</span>
+
+                {/* File upload */}
+                <div className="jde-quickfill-item">
+                  <span className="jde-quickfill-label">Upload file</span>
+                  <button
+                    className="ag-btn ag-btn--ghost ag-btn--sm jde-upload-btn"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={extracting}
+                  >
+                    {extracting ? '⟳ Extracting…' : '↑ PDF / DOCX / TXT'}
+                  </button>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".pdf,.docx,.txt"
+                    style={{ display: 'none' }}
+                    onChange={handleFile}
+                  />
+                </div>
+
+                <span className="jde-quickfill-or">or</span>
+
+                <span className="jde-quickfill-label" style={{ alignSelf: 'center' }}>paste below</span>
+
+                {jdText && (
+                  <button
+                    className="ag-btn ag-btn--ghost ag-btn--sm"
+                    style={{ marginLeft: 'auto' }}
+                    onClick={() => { setJdText(''); setSelectedJobId(''); }}
+                  >
+                    ✕ Clear
+                  </button>
+                )}
               </div>
+
               <textarea
                 className="ag-textarea jde-jd-textarea"
                 value={jdText}
-                onChange={e => setJdText(e.target.value)}
-                placeholder="Paste the full job description here, or upload a PDF / DOCX above…"
+                onChange={e => { setJdText(e.target.value); setSelectedJobId(''); }}
+                placeholder="Paste the full job description here, select a job above, or upload a file…"
                 rows={12}
               />
             </div>
