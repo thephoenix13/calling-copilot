@@ -16,6 +16,7 @@ import JDEnhancer from './components/agentic/JDEnhancer';
 import PipelineSessions from './components/agentic/PipelineSessions';
 import SessionWizard from './components/agentic/SessionWizard';
 import POFUModule from './components/agentic/POFUModule';
+import WelcomeDashboard from './components/WelcomeDashboard';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -405,7 +406,7 @@ export default function App() {
           setUserRole(role);
           setAuthToken(token);
           setDisplayName(name || '');
-          setView('calling-copilot');
+          setView('dashboard');
         }}
       />
     );
@@ -437,6 +438,7 @@ export default function App() {
     navigate('calling-copilot');
   };
 
+  if (view === 'dashboard')   return <AppShell {...shellProps}><WelcomeDashboard displayName={displayName} onNavigate={navigate} /></AppShell>;
   if (view === 'jobs')        return <AppShell {...shellProps}><JobsModule       {...moduleProps} /></AppShell>;
   if (view === 'candidates')  return <AppShell {...shellProps}><CandidatesModule {...moduleProps} /></AppShell>;
   if (view === 'jd-enhancer') return <AppShell {...shellProps}><JDEnhancer       {...moduleProps} /></AppShell>;

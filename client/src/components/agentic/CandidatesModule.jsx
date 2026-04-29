@@ -35,12 +35,30 @@ function SkillsInput({ value, onChange, placeholder }) {
 // ── Candidate form (create / edit) ───────────────────────────────────────────
 function CandidateForm({ candidate, onSave, onCancel, authFetch }) {
   const isEdit = !!candidate?.id;
-  const [saving,   setSaving]   = useState(false);
-  const [error,    setError]    = useState('');
-  const [mode,     setMode]     = useState(isEdit ? 'manual' : 'choose'); // 'choose' | 'upload' | 'manual'
-  const [parsing,  setParsing]  = useState(false);
-  const [parseErr, setParseErr] = useState('');
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState('');
+  const [mode,        setMode]        = useState(isEdit ? 'manual' : 'choose'); // 'choose' | 'upload' | 'manual'
+  const [parsing,     setParsing]     = useState(false);
+  const [parseErr,    setParseErr]    = useState('');
+  const [aiCheck,     setAiCheck]     = useState(null);  // { verdict, confidence, indicators, summary }
+  const [aiChecking,  setAiChecking]  = useState(false);
   const fileInputRef = useRef(null);
+
+  const runAiCheck = async (text) => {
+    if (!text || text.trim().length < 100) return;
+    setAiChecking(true);
+    setAiCheck(null);
+    try {
+      const res  = await authFetch(`${BACKEND_URL}/ai/check-ai-content`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (res.ok) setAiCheck(data);
+    } catch { /* silent */ }
+    finally { setAiChecking(false); }
+  };
 
   const [form, setForm] = useState({
     name:             candidate?.name             || '',
@@ -90,6 +108,7 @@ function CandidateForm({ candidate, onSave, onCancel, authFetch }) {
         resume_text:      data.resumeText    || prev.resume_text,
       }));
       setMode('manual');
+      if (data.resumeText) runAiCheck(data.resumeText);
     } catch {
       setParseErr('Network error during parsing.');
     } finally {
@@ -261,6 +280,53 @@ function CandidateForm({ candidate, onSave, onCancel, authFetch }) {
             </div>
           )}
         </div>
+
+        {/* AI Content Check */}
+        {(form.resume_text || aiCheck || aiChecking) && (
+          <div className="ag-field ag-field--full">
+            <div className="aic-panel">
+              <div className="aic-panel-header">
+                <span className="aic-panel-title">AI Content Check</span>
+                {!aiChecking && form.resume_text?.trim().length >= 100 && (
+                  <button type="button" className="ag-btn ag-btn--ghost ag-btn--sm"
+                    onClick={() => runAiCheck(form.resume_text)}>
+                    {aiCheck ? 'Re-check' : 'Run Check'}
+                  </button>
+                )}
+              </div>
+              {aiChecking && (
+                <div className="aic-loading"><span className="spinner" /> Analysing resume text…</div>
+              )}
+              {aiCheck && !aiChecking && (() => {
+                const v = aiCheck.verdict;
+                const cls = v === 'human' || v === 'likely_human' ? 'aic-badge--human'
+                          : v === 'mixed'                          ? 'aic-badge--mixed'
+                          :                                          'aic-badge--ai';
+                const label = {
+                  human:        'Human-written',
+                  likely_human: 'Likely human',
+                  mixed:        'Mixed (AI-assisted)',
+                  likely_ai:    'Likely AI-generated',
+                  ai_generated: 'AI-generated',
+                }[v] || v;
+                return (
+                  <div className="aic-result">
+                    <div className="aic-verdict-row">
+                      <span className={`aic-badge ${cls}`}>{label}</span>
+                      <span className="aic-confidence">{aiCheck.confidence}% confidence</span>
+                    </div>
+                    {aiCheck.summary && <p className="aic-summary">{aiCheck.summary}</p>}
+                    {aiCheck.indicators?.length > 0 && (
+                      <ul className="aic-indicators">
+                        {aiCheck.indicators.map((ind, i) => <li key={i}>{ind}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
 
         {error && <div className="ag-form-error">{error}</div>}
 

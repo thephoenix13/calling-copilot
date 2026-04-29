@@ -296,4 +296,60 @@ Rules:
   }
 });
 
+// ── POST /ai/check-ai-content ────────────────────────────────────────────────
+// Body (JSON): { text: string }
+// Returns { verdict, confidence, indicators, summary }
+router.post('/check-ai-content', express.json(), async (req, res) => {
+  try {
+    const { text } = req.body;
+
+    if (!text || text.trim().length < 100) {
+      return res.status(400).json({ error: 'text is required and must be at least 100 characters.' });
+    }
+
+    const truncated = text.trim().slice(0, 3000);
+
+    const prompt = `Analyze the following resume or profile text and determine whether it was written by a human or generated/heavily edited by AI.
+
+Text:
+${truncated}
+
+Evaluate based on:
+- Sentence structure variety (AI tends to be uniform)
+- Use of generic filler phrases (AI overuses: "proven track record", "results-driven", "passionate about", "leverage", "spearhead", "dynamic")
+- Specificity vs vagueness (humans include concrete details; AI inflates with abstractions)
+- Tense/voice consistency
+- Presence of natural human imperfections vs polished uniformity
+
+Return ONLY a JSON object (no markdown):
+{
+  "verdict": "human" | "likely_human" | "mixed" | "likely_ai" | "ai_generated",
+  "confidence": <0-100 integer>,
+  "indicators": ["up to 5 brief specific signals"],
+  "summary": "1-2 sentence explanation of the verdict"
+}`;
+
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const raw = response.content.find(b => b.type === 'text')?.text || '{}';
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      const match = raw.match(/\{[\s\S]*\}/);
+      parsed = match ? JSON.parse(match[0]) : {};
+    }
+
+    const { verdict, confidence, indicators, summary } = parsed;
+    res.json({ verdict, confidence, indicators, summary });
+  } catch (err) {
+    console.error('check-ai-content error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
