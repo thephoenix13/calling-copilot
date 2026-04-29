@@ -11,6 +11,9 @@ import LoginPage from './components/LoginPage';
 import UsersPanel from './components/UsersPanel';
 import Dashboard from './components/Dashboard';
 import AgenticApp from './components/agentic/AgenticApp';
+import JobsModule from './components/agentic/JobsModule';
+import CandidatesModule from './components/agentic/CandidatesModule';
+import JDEnhancer from './components/agentic/JDEnhancer';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -416,6 +419,12 @@ export default function App() {
       />
     );
   }
+
+  const sharedModuleProps = { authFetch, userRole, isLight, onToggleTheme: () => setIsLight(l => !l), onLogout: handleLogout };
+
+  if (view === 'jobs')        return <JobsModule       {...sharedModuleProps} onBack={() => setView('dashboard')} />;
+  if (view === 'candidates')  return <CandidatesModule {...sharedModuleProps} onBack={() => setView('dashboard')} />;
+  if (view === 'jd-enhancer') return <JDEnhancer       {...sharedModuleProps} onBack={() => setView('dashboard')} />;
 
   if (view === 'agentic') {
     return (

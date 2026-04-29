@@ -4,27 +4,6 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
 const NAV_CARDS = [
   {
-    id: 'jobs',
-    icon: '💼',
-    title: 'Job Management',
-    desc: 'Create and manage job openings. Define required skills, experience bands, and salary ranges that feed into the agentic pipeline.',
-    cta: 'Open',
-  },
-  {
-    id: 'candidates',
-    icon: '👤',
-    title: 'Candidate Database',
-    desc: 'Build and maintain your talent pool. Add candidates manually or by uploading resumes — Claude auto-fills the profile.',
-    cta: 'Open',
-  },
-  {
-    id: 'jd-enhancer',
-    icon: '✨',
-    title: 'JD Enhancer',
-    desc: 'Paste a job description and generate a formatted JD, recruiter brief, clarification questions, reachout messages, and sourcing keywords — all in one click.',
-    cta: 'Open',
-  },
-  {
     id: 'sessions',
     icon: '🔄',
     title: 'Pipeline Sessions',
