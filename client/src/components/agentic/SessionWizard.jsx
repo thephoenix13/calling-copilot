@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Step1_SelectJD from './steps/Step1_SelectJD';
 import Step2_EnhanceJD from './steps/Step2_EnhanceJD';
 import Step3_SourceCandidates from './steps/Step3_SourceCandidates';
@@ -43,10 +43,22 @@ function isStepUnlocked(stepNum, session) {
   }
 }
 
+const JD_TABS = [
+  { key: 'jd',        label: 'Formatted JD',   field: 'formattedJD'            },
+  { key: 'brief',     label: 'Recruiter Brief', field: 'recruiterBrief'         },
+  { key: 'questions', label: 'Clarifications',  field: 'clarificationQuestions' },
+  { key: 'reachout',  label: 'Reachout',        field: 'reachoutMaterial'       },
+  { key: 'keywords',  label: 'Keywords',        field: 'sourcingKeywords'       },
+];
+
 export default function SessionWizard({ sessionId, authFetch, isLight, onToggleTheme, onLogout, onBack, onScreenViaCall }) {
-  const [session, setSession]   = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [activeStep, setActiveStep] = useState(null);
+  const [session,     setSession]     = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [activeStep,  setActiveStep]  = useState(null);
+  const [showJDModal, setShowJDModal] = useState(false);
+  const [jdModalTab,  setJdModalTab]  = useState('jd');
+
+  const activeStepRef = useRef(null);
 
   const fetchSession = useCallback(async () => {
     try {
@@ -54,16 +66,25 @@ export default function SessionWizard({ sessionId, authFetch, isLight, onToggleT
       const data = await res.json();
       if (data.session) {
         setSession(data.session);
-        if (activeStep === null) setActiveStep(data.session.current_step);
+        if (activeStepRef.current === null) {
+          setActiveStep(data.session.current_step);
+          activeStepRef.current = data.session.current_step;
+        }
       }
     } catch (err) {
       console.error('fetch session error:', err);
     } finally {
       setLoading(false);
     }
-  }, [sessionId, authFetch, activeStep]);
+  }, [sessionId, authFetch]);
 
-  useEffect(() => { fetchSession(); }, [sessionId]);
+  useEffect(() => {
+    activeStepRef.current = null;
+    setActiveStep(null);
+    setLoading(true);
+    setSession(null);
+    fetchSession();
+  }, [sessionId]);
 
   // Called by a step when it completes — optionally advances current_step
   const handleStepComplete = async (updates = {}, advanceTo = null) => {
@@ -130,16 +151,6 @@ export default function SessionWizard({ sessionId, authFetch, isLight, onToggleT
   };
 
   // ── JD Assets modal ────────────────────────────────────────────────────
-  const [showJDModal, setShowJDModal] = useState(false);
-  const [jdModalTab, setJdModalTab]   = useState('jd');
-
-  const JD_TABS = [
-    { key: 'jd',        label: 'Formatted JD',   field: 'formattedJD'            },
-    { key: 'brief',     label: 'Recruiter Brief', field: 'recruiterBrief'         },
-    { key: 'questions', label: 'Clarifications',  field: 'clarificationQuestions' },
-    { key: 'reachout',  label: 'Reachout',        field: 'reachoutMaterial'       },
-    { key: 'keywords',  label: 'Keywords',        field: 'sourcingKeywords'       },
-  ];
   const enhancement = session.enhancement_data;
 
   const copyJDTab = (tabKey) => {
