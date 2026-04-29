@@ -128,20 +128,13 @@ export default function SessionWizard({ sessionId, authFetch, isLight, onToggleT
   };
 
   return (
-    <div className={`app${isLight ? ' light' : ''}`}>
-      {/* Header */}
-      <header className="app-header">
-        <div className="header-left">
-          <button className="report-btn" onClick={onBack}>← Sessions</button>
-          <span className="logo">🔄</span>
-          <h1 className="sw-session-name">{session.name || `Session #${session.id}`}</h1>
-          {session.job?.title && <span className="sw-job-tag">💼 {session.job.title}</span>}
-        </div>
-        <div className="header-right">
-          <button className="theme-toggle-btn" onClick={onToggleTheme}>{isLight ? '🌙 Dark' : '☀️ Light'}</button>
-          <button className="report-btn" onClick={onLogout}>Sign out</button>
-        </div>
-      </header>
+    <div className="page-content page-content--wide">
+      {/* Session breadcrumb */}
+      <div className="sw-session-breadcrumb">
+        <button className="sw-back-link" onClick={onBack}>← Sessions</button>
+        <span className="sw-session-crumb-name">{session.name || `Session #${session.id}`}</span>
+        {session.job?.title && <span className="sw-job-tag">{session.job.title}</span>}
+      </div>
 
       {/* Step indicator */}
       <div className="sw-step-bar">

@@ -173,27 +173,18 @@ export default function POFUCandidate({ candidateId, authFetch, isLight, onToggl
     onBack();
   };
 
-  if (loading) return <div className={`app${isLight ? ' light' : ''}`}><div className="sw-loading" style={{ padding: 40 }}>Loading…</div></div>;
-  if (!candidate) return <div className={`app${isLight ? ' light' : ''}`}><div style={{ padding: 40, color: 'var(--text-3)' }}>Not found.</div></div>;
+  if (loading) return <div className="page-content"><div className="sw-loading" style={{ padding: 40 }}>Loading…</div></div>;
+  if (!candidate) return <div className="page-content"><div style={{ padding: 40, color: 'var(--text-3)' }}>Not found.</div></div>;
 
   const dirty = editState !== candidate.state || editDoj !== (candidate.doj ? candidate.doj.split('T')[0] : '') || editNotes !== (candidate.notes || '') || editEmail !== (candidate.candidate_email || '');
 
   return (
-    <div className={`app${isLight ? ' light' : ''}`}>
-      <header className="app-header">
-        <div className="header-left">
-          <button className="report-btn" onClick={onBack}>← POFU List</button>
-          <span className="logo">🎯</span>
-          <h1 style={{ fontSize: 17 }}>{candidate.candidate_name}</h1>
-          {candidate.auto_paused ? (
-            <span style={{ fontSize: 11, background: 'rgba(156,163,175,0.15)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px', marginLeft: 8 }}>⏸ Paused</span>
-          ) : null}
-        </div>
-        <div className="header-right">
-          <button className="theme-toggle-btn" onClick={onToggleTheme}>{isLight ? '🌙 Dark' : '☀️ Light'}</button>
-          <button className="report-btn" onClick={onLogout}>Sign out</button>
-        </div>
-      </header>
+    <div className="page-content page-content--wide">
+      <div className="sw-session-breadcrumb" style={{ marginBottom: 20 }}>
+        <button className="sw-back-link" onClick={onBack}>← POFU List</button>
+        <span className="sw-session-crumb-name">{candidate.candidate_name}</span>
+        {candidate.auto_paused && <span style={{ fontSize: 11, color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 7px' }}>Paused</span>}
+      </div>
 
       <div className="pofu-candidate-page">
         {/* Left column — profile + edit */}

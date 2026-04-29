@@ -260,17 +260,7 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
   // ── Form view ──
   if (view === 'form') {
     return (
-      <div className={`app${isLight ? ' light' : ''}`}>
-        <header className="app-header">
-          <div className="header-left">
-            <span className="logo">💼</span>
-            <h1>Job Management</h1>
-          </div>
-          <div className="header-right">
-            <button className="theme-toggle-btn" onClick={onToggleTheme}>{isLight ? '🌙 Dark' : '☀️ Light'}</button>
-            <button className="report-btn" onClick={onLogout}>Sign out</button>
-          </div>
-        </header>
+      <div className="page-content">
         <div className="ag-module-body">
           <JobForm
             job={editJob}
@@ -285,19 +275,7 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
 
   // ── List view ──
   return (
-    <div className={`app${isLight ? ' light' : ''}`}>
-      <header className="app-header">
-        <div className="header-left">
-          <button className="report-btn" onClick={onBack}>← Agentic Home</button>
-          <span className="logo">💼</span>
-          <h1>Job Management</h1>
-        </div>
-        <div className="header-right">
-          <button className="theme-toggle-btn" onClick={onToggleTheme}>{isLight ? '🌙 Dark' : '☀️ Light'}</button>
-          <button className="report-btn" onClick={onLogout}>Sign out</button>
-        </div>
-      </header>
-
+    <div className="page-content">
       <div className="ag-module-body">
         {/* Toolbar */}
         <div className="ag-toolbar">

@@ -80,18 +80,7 @@ export default function PipelineSessions({ authFetch, onBack, onOpenSession, isL
   };
 
   return (
-    <div className={`app${isLight ? ' light' : ''}`}>
-      <header className="app-header">
-        <div className="header-left">
-          <button className="report-btn" onClick={onBack}>← Agentic Home</button>
-          <span className="logo">🔄</span>
-          <h1>Pipeline Sessions</h1>
-        </div>
-        <div className="header-right">
-          <button className="theme-toggle-btn" onClick={onToggleTheme}>{isLight ? '🌙 Dark' : '☀️ Light'}</button>
-          <button className="report-btn" onClick={onLogout}>Sign out</button>
-        </div>
-      </header>
+    <div className="page-content page-content--wide">
 
       <div className="ps-body">
         <div className="ps-toolbar">

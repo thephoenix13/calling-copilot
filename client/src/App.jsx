@@ -9,11 +9,13 @@ import CandidateEvaluationReport from './components/CandidateEvaluationReport';
 import InterviewPanel from './components/InterviewPanel';
 import LoginPage from './components/LoginPage';
 import UsersPanel from './components/UsersPanel';
-import Dashboard from './components/Dashboard';
-import AgenticApp from './components/agentic/AgenticApp';
+import AppShell from './components/AppShell';
 import JobsModule from './components/agentic/JobsModule';
 import CandidatesModule from './components/agentic/CandidatesModule';
 import JDEnhancer from './components/agentic/JDEnhancer';
+import PipelineSessions from './components/agentic/PipelineSessions';
+import SessionWizard from './components/agentic/SessionWizard';
+import POFUModule from './components/agentic/POFUModule';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -70,7 +72,8 @@ export default function App() {
     } catch { return null; }
   });
   const isAdmin = userRole === 'admin';
-  const [view, setView] = useState('dashboard'); // 'dashboard' | 'calling-copilot' | 'agentic'
+  const [view, setView] = useState('calling-copilot');
+  const [sessionId, setSessionId] = useState(null);
   const [displayName, setDisplayName] = useState('');
   // screeningContext: set when launching a call from Step 4 of a pipeline session
   // { sessionId, scId, candidateName, roleTitle, jd, resume }
@@ -98,8 +101,8 @@ export default function App() {
   const [currentCallSid, setCurrentCallSid] = useState(null);
   const socketRef = useRef(null);
 
-  // ── Theme ──────────────────────────────────────────────────────────────
-  const [isLight, setIsLight] = useState(false);
+  // ── Theme — light by default ──────────────────────────────────────────
+  const [isLight, setIsLight] = useState(true);
 
   // ── Simulation state ────────────────────────────────────────────────────
   const isSimModeRef = useRef(false);
@@ -402,49 +405,64 @@ export default function App() {
           setUserRole(role);
           setAuthToken(token);
           setDisplayName(name || '');
-          setView('dashboard');
-        }}
-      />
-    );
-  }
-
-  if (view === 'dashboard') {
-    return (
-      <Dashboard
-        displayName={displayName}
-        onSelect={setView}
-        onLogout={handleLogout}
-        isLight={isLight}
-        onToggleTheme={() => setIsLight((l) => !l)}
-      />
-    );
-  }
-
-  const sharedModuleProps = { authFetch, userRole, isLight, onToggleTheme: () => setIsLight(l => !l), onLogout: handleLogout };
-
-  if (view === 'jobs')        return <JobsModule       {...sharedModuleProps} onBack={() => setView('dashboard')} />;
-  if (view === 'candidates')  return <CandidatesModule {...sharedModuleProps} onBack={() => setView('dashboard')} />;
-  if (view === 'jd-enhancer') return <JDEnhancer       {...sharedModuleProps} onBack={() => setView('dashboard')} />;
-
-  if (view === 'agentic') {
-    return (
-      <AgenticApp
-        authFetch={authFetch}
-        userRole={userRole}
-        isLight={isLight}
-        onToggleTheme={() => setIsLight((l) => !l)}
-        onLogout={handleLogout}
-        onBackToDashboard={() => setView('dashboard')}
-        onScreenViaCall={(ctx) => {
-          setScreeningContext(ctx);
-          setCallStatus('idle');
-          setTranscript([]);
-          setPhoneNumber('+');
-          setReportData(null);
-          isSimModeRef.current = false;
           setView('calling-copilot');
         }}
       />
+    );
+  }
+
+  const navigate = (newView) => {
+    setView(newView);
+    if (newView !== 'sessions') setSessionId(null);
+  };
+
+  const shellProps = {
+    currentView: view,
+    onNavigate: navigate,
+    isLight,
+    onToggleTheme: () => setIsLight(l => !l),
+    onLogout: handleLogout,
+    displayName,
+  };
+
+  const moduleProps = { authFetch, userRole, isLight, onToggleTheme: () => setIsLight(l => !l), onLogout: handleLogout };
+
+  const onScreenViaCall = (ctx) => {
+    setScreeningContext(ctx);
+    setCallStatus('idle');
+    setTranscript([]);
+    setPhoneNumber('+');
+    setReportData(null);
+    isSimModeRef.current = false;
+    navigate('calling-copilot');
+  };
+
+  if (view === 'jobs')        return <AppShell {...shellProps}><JobsModule       {...moduleProps} /></AppShell>;
+  if (view === 'candidates')  return <AppShell {...shellProps}><CandidatesModule {...moduleProps} /></AppShell>;
+  if (view === 'jd-enhancer') return <AppShell {...shellProps}><JDEnhancer       {...moduleProps} /></AppShell>;
+  if (view === 'pofu')        return <AppShell {...shellProps}><POFUModule        {...moduleProps} /></AppShell>;
+
+  if (view === 'sessions') {
+    if (sessionId) {
+      return (
+        <AppShell {...shellProps}>
+          <SessionWizard
+            {...moduleProps}
+            sessionId={sessionId}
+            onBack={() => setSessionId(null)}
+            onScreenViaCall={onScreenViaCall}
+          />
+        </AppShell>
+      );
+    }
+    return (
+      <AppShell {...shellProps}>
+        <PipelineSessions
+          {...moduleProps}
+          onBack={() => navigate('calling-copilot')}
+          onOpenSession={id => setSessionId(id)}
+        />
+      </AppShell>
     );
   }
 
@@ -463,11 +481,12 @@ export default function App() {
       }
     }
     resetCall();
-    setView('agentic');
+    navigate('sessions');
   };
 
   return (
-    <div className={`app${isLight ? ' light' : ''}`}>
+    <AppShell {...shellProps}>
+      <div className="calling-layout">
       {/* ── QA Report ── */}
       {showReport && (
         <div className="report-overlay">
@@ -530,14 +549,10 @@ export default function App() {
       {/* ── Header ── */}
       <header className="app-header">
         <div className="header-left">
-          {(callStatus === 'idle' || callStatus === 'ended') && !screeningContext && (
-            <button className="report-btn" onClick={() => setView('dashboard')}>← Dashboard</button>
-          )}
           {(callStatus === 'idle') && screeningContext && (
-            <button className="report-btn" onClick={() => { setScreeningContext(null); setView('agentic'); }}>← Back to Session</button>
+            <button className="report-btn" onClick={() => { setScreeningContext(null); navigate('sessions'); }}>← Back to Session</button>
           )}
-          <span className="logo">📞</span>
-          <h1>Calling CoPilot</h1>
+          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-1)' }}>Calling CoPilot</span>
           {screeningContext && (
             <span className="sw-screening-banner">📋 {screeningContext.candidateName} · {screeningContext.roleTitle}</span>
           )}
@@ -614,6 +629,7 @@ export default function App() {
           />
         </div>
       </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

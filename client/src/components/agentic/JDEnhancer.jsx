@@ -351,23 +351,7 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
   // ═══════════════════════════════════════════════════════════════════════
 
   return (
-    <div className={`app${isLight ? ' light' : ''}`}>
-      {/* Header */}
-      <header className="app-header">
-        <div className="header-left">
-          <button className="report-btn" onClick={view === 'results' ? handleNew : onBack}>
-            ← {view === 'results' ? 'New Enhancement' : 'Agentic Home'}
-          </button>
-          <span className="logo">✨</span>
-          <h1>JD Enhancer</h1>
-        </div>
-        <div className="header-right">
-          <button className="theme-toggle-btn" onClick={onToggleTheme}>
-            {isLight ? '🌙 Dark' : '☀️ Light'}
-          </button>
-          <button className="report-btn" onClick={onLogout}>Sign out</button>
-        </div>
-      </header>
+    <div className="page-content page-content--wide">
 
       {/* ── Loading view ─────────────────────────────────────────────── */}
       {view === 'loading' && (

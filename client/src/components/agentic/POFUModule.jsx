@@ -90,18 +90,7 @@ export default function POFUModule({ authFetch, isLight, onToggleTheme, onLogout
   }
 
   return (
-    <div className={`app${isLight ? ' light' : ''}`}>
-      <header className="app-header">
-        <div className="header-left">
-          <button className="report-btn" onClick={onBack}>← Agentic Home</button>
-          <span className="logo">🎯</span>
-          <h1>POFU <span style={{ fontSize: 12, background: 'var(--orange-dim)', color: 'var(--orange)', border: '1px solid var(--orange-border)', borderRadius: 6, padding: '2px 8px', marginLeft: 8, verticalAlign: 'middle' }}>Beta</span></h1>
-        </div>
-        <div className="header-right">
-          <button className="theme-toggle-btn" onClick={onToggleTheme}>{isLight ? '🌙 Dark' : '☀️ Light'}</button>
-          <button className="report-btn" onClick={onLogout}>Sign out</button>
-        </div>
-      </header>
+    <div className="page-content">
 
       <div className="pofu-page">
         {/* Stats strip */}

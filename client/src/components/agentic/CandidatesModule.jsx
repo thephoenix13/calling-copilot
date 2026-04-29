@@ -380,26 +380,12 @@ export default function CandidatesModule({ authFetch, isLight, onToggleTheme, on
     }
   };
 
-  const pageHeader = (
-    <header className="app-header">
-      <div className="header-left">
-        {view === 'list'
-          ? <button className="report-btn" onClick={onBack}>← Agentic Home</button>
-          : null}
-        <span className="logo">👤</span>
-        <h1>Candidate Database</h1>
-      </div>
-      <div className="header-right">
-        <button className="theme-toggle-btn" onClick={onToggleTheme}>{isLight ? '🌙 Dark' : '☀️ Light'}</button>
-        <button className="report-btn" onClick={onLogout}>Sign out</button>
-      </div>
-    </header>
-  );
+  const pageHeader = null;
 
   // ── Profile view ──
   if (view === 'profile' && selected) {
     return (
-      <div className={`app${isLight ? ' light' : ''}`}>
+      <div className="page-content">
         {pageHeader}
         <div className="ag-module-body">
           <CandidateProfile
@@ -415,7 +401,7 @@ export default function CandidatesModule({ authFetch, isLight, onToggleTheme, on
   // ── Form view ──
   if (view === 'form') {
     return (
-      <div className={`app${isLight ? ' light' : ''}`}>
+      <div className="page-content">
         {pageHeader}
         <div className="ag-module-body">
           <CandidateForm
@@ -431,7 +417,7 @@ export default function CandidatesModule({ authFetch, isLight, onToggleTheme, on
 
   // ── List view ──
   return (
-    <div className={`app${isLight ? ' light' : ''}`}>
+    <div className="page-content">
       {pageHeader}
       <div className="ag-module-body">
         <div className="ag-toolbar">

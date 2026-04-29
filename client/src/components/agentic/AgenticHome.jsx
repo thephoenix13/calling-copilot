@@ -36,20 +36,7 @@ export default function AgenticHome({ authFetch, isLight, onToggleTheme, onLogou
   }, [authFetch]);
 
   return (
-    <div className={`app${isLight ? ' light' : ''}`}>
-      <header className="app-header">
-        <div className="header-left">
-          <button className="report-btn" onClick={onBackToDashboard}>← Dashboard</button>
-          <span className="logo">🤖</span>
-          <h1>Agentic Mode</h1>
-        </div>
-        <div className="header-right">
-          <button className="theme-toggle-btn" onClick={onToggleTheme}>
-            {isLight ? '🌙 Dark' : '☀️ Light'}
-          </button>
-          <button className="report-btn" onClick={onLogout}>Sign out</button>
-        </div>
-      </header>
+    <div className="page-content">
 
       <div className="ag-home-body">
         {/* Stats strip */}
