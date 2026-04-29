@@ -1,6 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+
+// ── Compact AI verdict badge ──────────────────────────────────────────────────
+const AIC_LABELS = {
+  human:        { label: 'Human',     cls: 'aic-badge--human' },
+  likely_human: { label: 'Likely Human', cls: 'aic-badge--human' },
+  mixed:        { label: 'AI-Assisted', cls: 'aic-badge--mixed' },
+  likely_ai:    { label: 'Likely AI', cls: 'aic-badge--ai' },
+  ai_generated: { label: 'AI-Written', cls: 'aic-badge--ai' },
+};
+function AicBadge({ result }) {
+  const { label, cls } = AIC_LABELS[result.verdict] || { label: result.verdict, cls: '' };
+  return (
+    <span className={`aic-badge aic-badge--sm ${cls}`} title={result.summary}>
+      {label} · {result.confidence}%
+    </span>
+  );
+}
 
 function calcMatch(candidateSkills, reqSkills, prefSkills) {
   const cs = (candidateSkills || []).map(s => s.toLowerCase().trim());
@@ -31,6 +48,30 @@ export default function Step3_SourceCandidates({ session, authFetch, onComplete,
   const [loading, setLoading]         = useState(true);
   const [adding, setAdding]           = useState(false);
   const [evaluating, setEvaluating]   = useState({});
+  // AI check: { [candidateId]: { checking: bool, result: null | {...} } }
+  const [aiChecks, setAiChecks]       = useState({});
+  // Eval report modal
+  const [reportSc, setReportSc]       = useState(null); // session_candidate row
+
+  const runAiCheck = useCallback(async (candidate) => {
+    const text = candidate.resume_text;
+    if (!text || text.trim().length < 100) return;
+    setAiChecks(prev => ({ ...prev, [candidate.id]: { checking: true, result: null } }));
+    try {
+      const res  = await authFetch(`${BACKEND_URL}/ai/check-ai-content`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      setAiChecks(prev => ({
+        ...prev,
+        [candidate.id]: { checking: false, result: res.ok ? data : null },
+      }));
+    } catch {
+      setAiChecks(prev => ({ ...prev, [candidate.id]: { checking: false, result: null } }));
+    }
+  }, [authFetch]);
 
   const job       = session.job;
   const reqSkills = job?.required_skills  || [];
@@ -118,12 +159,20 @@ export default function Step3_SourceCandidates({ session, authFetch, onComplete,
                 </div>
                 <div className="sw-added-badges">
                   <MatchBadge pct={Math.round(sc.match_percentage || 0)} />
-                  {(evaluating[sc.id] || (sc.resume_score == null && !evaluating[sc.id]))
-                    ? sc.resume_score == null
-                      ? <span className="sw-eval-badge sw-eval-badge--pending">No eval</span>
-                      : null
-                    : <ScoreBadge score={sc.resume_score} />
-                  }
+                  {evaluating[sc.id] ? (
+                    <span className="sw-eval-badge sw-eval-badge--pending">Evaluating…</span>
+                  ) : sc.resume_score ? (
+                    <>
+                      <ScoreBadge score={sc.resume_score} />
+                      <button
+                        className="aic-check-btn"
+                        style={{ marginLeft: 4 }}
+                        onClick={() => setReportSc(sc)}
+                      >View Report</button>
+                    </>
+                  ) : (
+                    <span className="sw-eval-badge sw-eval-badge--pending">No eval</span>
+                  )}
                 </div>
                 <button className="ag-action-btn ag-action-btn--danger" onClick={() => handleRemove(sc.id)}>✕</button>
               </div>
@@ -168,12 +217,15 @@ export default function Step3_SourceCandidates({ session, authFetch, onComplete,
                   <th>Current Title</th>
                   <th>Match</th>
                   <th>Skills</th>
+                  <th style={{ width: 120 }}>AI Content</th>
                 </tr>
               </thead>
               <tbody>
                 {candidates.map(c => {
                   const matched   = reqSkills.filter(s => (c.skills || []).map(x => x.toLowerCase()).includes(s.toLowerCase()));
                   const unmatched = reqSkills.filter(s => !matched.includes(s));
+                  const aic       = aiChecks[c.id];
+                  const hasResume = c.resume_text?.trim().length >= 100;
                   return (
                     <tr key={c.id} className={selected[c.id] ? 'sw-row--selected' : ''} onClick={() => toggleSelect(c.id)} style={{ cursor: 'pointer' }}>
                       <td onClick={e => e.stopPropagation()}>
@@ -189,6 +241,19 @@ export default function Step3_SourceCandidates({ session, authFetch, onComplete,
                           {(matched.length + unmatched.length) > 7 && <span className="sw-more">+{(matched.length + unmatched.length) - 7}</span>}
                         </div>
                       </td>
+                      <td onClick={e => e.stopPropagation()}>
+                        {!hasResume ? (
+                          <span className="aic-no-resume">No resume</span>
+                        ) : aic?.checking ? (
+                          <span className="aic-checking"><span className="spinner" style={{ width: 12, height: 12 }} /> Checking…</span>
+                        ) : aic?.result ? (
+                          <AicBadge result={aic.result} />
+                        ) : (
+                          <button className="aic-check-btn" onClick={() => runAiCheck(c)}>
+                            Check AI
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -197,6 +262,74 @@ export default function Step3_SourceCandidates({ session, authFetch, onComplete,
           </div>
         )}
       </div>
+
+      {/* Eval report modal */}
+      {reportSc && reportSc.resume_score && (
+        <div className="ag-modal-overlay" onClick={() => setReportSc(null)}>
+          <div className="eval-report-modal" onClick={e => e.stopPropagation()}>
+            <div className="eval-report-header">
+              <div>
+                <div className="eval-report-title">{reportSc.candidate_name}</div>
+                {reportSc.candidate_title && (
+                  <div className="eval-report-subtitle">{reportSc.candidate_title}</div>
+                )}
+              </div>
+              <button className="jde-assets-modal-close" onClick={() => setReportSc(null)}>✕</button>
+            </div>
+
+            {(() => {
+              const s = reportSc.resume_score;
+              const scoreBar = (label, val) => (
+                <div key={label} className="eval-score-row">
+                  <span className="eval-score-label">{label}</span>
+                  <div className="eval-score-bar-wrap">
+                    <div
+                      className="eval-score-bar"
+                      style={{
+                        width: `${val}%`,
+                        background: val >= 70 ? 'var(--emerald)' : val >= 40 ? '#f59e0b' : '#ef4444',
+                      }}
+                    />
+                  </div>
+                  <span className="eval-score-num">{val}</span>
+                </div>
+              );
+              return (
+                <div className="eval-report-body">
+                  <div className="eval-scores">
+                    {scoreBar('Overall Match', s.overall)}
+                    {s.contentQuality != null && scoreBar('Content Quality', s.contentQuality)}
+                    {s.aiWritingDetection != null && scoreBar('Human Authenticity', 100 - s.aiWritingDetection)}
+                  </div>
+
+                  <div className="eval-section">
+                    <div className="eval-section-label">Experience Level</div>
+                    <span className="sw-eval-badge sw-eval-badge--mid" style={{ textTransform: 'capitalize' }}>
+                      {s.experienceLevel || '—'}
+                    </span>
+                  </div>
+
+                  {s.verdict && (
+                    <div className="eval-section">
+                      <div className="eval-section-label">Verdict</div>
+                      <p className="eval-verdict-text">{s.verdict}</p>
+                    </div>
+                  )}
+
+                  {s.strengths?.length > 0 && (
+                    <div className="eval-section">
+                      <div className="eval-section-label">Key Strengths</div>
+                      <ul className="eval-strengths">
+                        {s.strengths.map((str, i) => <li key={i}>{str}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

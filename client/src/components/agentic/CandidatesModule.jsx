@@ -42,12 +42,14 @@ function CandidateForm({ candidate, onSave, onCancel, authFetch }) {
   const [parseErr,    setParseErr]    = useState('');
   const [aiCheck,     setAiCheck]     = useState(null);  // { verdict, confidence, indicators, summary }
   const [aiChecking,  setAiChecking]  = useState(false);
+  const [aiError,     setAiError]     = useState('');
   const fileInputRef = useRef(null);
 
   const runAiCheck = async (text) => {
     if (!text || text.trim().length < 100) return;
     setAiChecking(true);
     setAiCheck(null);
+    setAiError('');
     try {
       const res  = await authFetch(`${BACKEND_URL}/ai/check-ai-content`, {
         method: 'POST',
@@ -56,8 +58,12 @@ function CandidateForm({ candidate, onSave, onCancel, authFetch }) {
       });
       const data = await res.json();
       if (res.ok) setAiCheck(data);
-    } catch { /* silent */ }
-    finally { setAiChecking(false); }
+      else setAiError(data.error || 'Check failed. Please try again.');
+    } catch {
+      setAiError('Network error. Please try again.');
+    } finally {
+      setAiChecking(false);
+    }
   };
 
   const [form, setForm] = useState({
@@ -279,10 +285,27 @@ function CandidateForm({ candidate, onSave, onCancel, authFetch }) {
               </div>
             </div>
           )}
+
+          {/* Resume text paste — shown when no file uploaded, or always in edit mode */}
+          <div className="ag-field ag-field--full">
+            <label className="ag-label">
+              Resume Text
+              <span style={{ fontWeight: 400, color: 'var(--text-3)', marginLeft: 6 }}>
+                (paste here to enable AI content check)
+              </span>
+            </label>
+            <textarea
+              className="ag-input ag-textarea"
+              rows={5}
+              value={form.resume_text}
+              onChange={e => { set('resume_text', e.target.value); setAiCheck(null); setAiError(''); }}
+              placeholder="Paste the candidate's raw resume text here…"
+            />
+          </div>
         </div>
 
         {/* AI Content Check */}
-        {(form.resume_text || aiCheck || aiChecking) && (
+        {(form.resume_text?.trim().length >= 100 || aiCheck || aiChecking) && (
           <div className="ag-field ag-field--full">
             <div className="aic-panel">
               <div className="aic-panel-header">
@@ -324,6 +347,9 @@ function CandidateForm({ candidate, onSave, onCancel, authFetch }) {
                   </div>
                 );
               })()}
+              {aiError && !aiChecking && (
+                <div style={{ fontSize: 12, color: '#dc2626', marginTop: 6 }}>⚠ {aiError}</div>
+              )}
             </div>
           </div>
         )}

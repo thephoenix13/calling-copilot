@@ -543,6 +543,58 @@ html, body, #root {
   color: var(--text-2);
   line-height: 1.4;
 }
+/* compact badge used in tables */
+.aic-badge--sm { font-size: 11px; padding: 2px 7px; }
+.aic-check-btn {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  background: rgba(37,99,235,0.07);
+  border: 1px solid rgba(37,99,235,0.2);
+  border-radius: 5px;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.aic-check-btn:hover { background: rgba(37,99,235,0.14); }
+.aic-no-resume { font-size: 11px; color: var(--text-3); }
+.aic-checking  { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-2); }
+
+/* ── Eval report modal ───────────────────────────────────────────────────── */
+.eval-report-modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: min(520px, 94vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.16);
+}
+.eval-report-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.eval-report-title   { font-size: 15px; font-weight: 600; color: var(--text-1); }
+.eval-report-subtitle { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.eval-report-body    { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+.eval-scores         { display: flex; flex-direction: column; gap: 10px; }
+.eval-score-row      { display: flex; align-items: center; gap: 10px; }
+.eval-score-label    { font-size: 12px; color: var(--text-2); width: 140px; min-width: 140px; }
+.eval-score-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.eval-score-bar      { height: 100%; border-radius: 3px; transition: width 0.4s; }
+.eval-score-num      { font-size: 12px; font-weight: 600; color: var(--text-1); width: 24px; text-align: right; }
+.eval-section        { display: flex; flex-direction: column; gap: 6px; }
+.eval-section-label  { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); }
+.eval-verdict-text   { margin: 0; font-size: 13px; color: var(--text-1); line-height: 1.55; }
+.eval-strengths      { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.eval-strengths li   { font-size: 13px; color: var(--text-2); line-height: 1.4; }
 
 /* ── Session / sub-view breadcrumb ───────────────────────────────────────── */
 .sw-session-breadcrumb {
