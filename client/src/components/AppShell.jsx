@@ -94,10 +94,10 @@ export default function AppShell({ children, currentView, onNavigate, isLight, o
       <aside className="sidebar">
         {/* Logo */}
         <div className="sidebar-logo">
-          <div className="sidebar-logo-mark">RC</div>
+          <div className="sidebar-logo-mark">Z</div>
           <div className="sidebar-logo-text">
-            <span className="sidebar-product">Recruiter</span>
-            <span className="sidebar-tagline">CoPilot</span>
+            <span className="sidebar-product">Zeople</span>
+            <span className="sidebar-tagline">Recruiting AI</span>
           </div>
         </div>
 
