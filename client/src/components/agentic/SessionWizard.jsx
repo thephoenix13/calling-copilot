@@ -6,6 +6,10 @@ import Step4_RecruiterScreening from './steps/Step4_RecruiterScreening';
 import Step5_AIInterviewReports from './steps/Step5_AIInterviewReports';
 import Step6_Decision from './steps/Step6_Decision';
 import Step7_PipelineTracker from './steps/Step7_PipelineTracker';
+import {
+  FormattedJDTab, RecruiterBriefTab, ClarificationsTab,
+  ReachoutTab, KeywordsTab, stripMarkers,
+} from './JDEnhancerTabs';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -38,8 +42,6 @@ function isStepUnlocked(stepNum, session) {
     default: return false;
   }
 }
-
-const stripMarkers = (t) => (t || '').replace(/\[\[NOTES_HIGHLIGHT\]\]/g, '').replace(/\[\[\/NOTES_HIGHLIGHT\]\]/g, '');
 
 export default function SessionWizard({ sessionId, authFetch, isLight, onToggleTheme, onLogout, onBack, onScreenViaCall }) {
   const [session, setSession]   = useState(null);
@@ -127,6 +129,26 @@ export default function SessionWizard({ sessionId, authFetch, isLight, onToggleT
     onScreenViaCall: handleScreenViaCall,
   };
 
+  // ── JD Assets modal ────────────────────────────────────────────────────
+  const [showJDModal, setShowJDModal] = useState(false);
+  const [jdModalTab, setJdModalTab]   = useState('jd');
+
+  const JD_TABS = [
+    { key: 'jd',        label: 'Formatted JD',   field: 'formattedJD'            },
+    { key: 'brief',     label: 'Recruiter Brief', field: 'recruiterBrief'         },
+    { key: 'questions', label: 'Clarifications',  field: 'clarificationQuestions' },
+    { key: 'reachout',  label: 'Reachout',        field: 'reachoutMaterial'       },
+    { key: 'keywords',  label: 'Keywords',        field: 'sourcingKeywords'       },
+  ];
+  const enhancement = session.enhancement_data;
+
+  const copyJDTab = (tabKey) => {
+    const tab = JD_TABS.find(t => t.key === tabKey);
+    const content = enhancement?.[tab.field];
+    const text = typeof content === 'string' ? stripMarkers(content) : JSON.stringify(content, null, 2);
+    navigator.clipboard.writeText(text).catch(() => {});
+  };
+
   return (
     <div className="page-content page-content--wide">
       {/* Session breadcrumb */}
@@ -134,6 +156,14 @@ export default function SessionWizard({ sessionId, authFetch, isLight, onToggleT
         <button className="sw-back-link" onClick={onBack}>← Sessions</button>
         <span className="sw-session-crumb-name">{session.name || `Session #${session.id}`}</span>
         {session.job?.title && <span className="sw-job-tag">{session.job.title}</span>}
+        {enhancement && (
+          <button
+            className="sw-jd-assets-btn"
+            onClick={() => { setShowJDModal(true); setJdModalTab('jd'); }}
+          >
+            View JD Assets
+          </button>
+        )}
       </div>
 
       {/* Step indicator */}
@@ -169,6 +199,43 @@ export default function SessionWizard({ sessionId, authFetch, isLight, onToggleT
         {currentActive === 6 && <Step6_Decision {...stepProps} />}
         {currentActive === 7 && <Step7_PipelineTracker {...stepProps} />}
       </div>
+
+      {/* JD Assets modal */}
+      {showJDModal && enhancement && (
+        <div className="ag-modal-overlay" onClick={() => setShowJDModal(false)}>
+          <div className="jde-assets-modal" onClick={e => e.stopPropagation()}>
+            <div className="jde-assets-modal-header">
+              <h3 className="jde-assets-modal-title">
+                JD Assets{session.job?.title ? ` — ${session.job.title}` : ''}
+              </h3>
+              <button className="jde-assets-modal-close" onClick={() => setShowJDModal(false)}>✕</button>
+            </div>
+            <div className="jde-tab-bar">
+              {JD_TABS.map(tab => (
+                <button
+                  key={tab.key}
+                  className={`jde-tab-btn${jdModalTab === tab.key ? ' jde-tab-btn--active' : ''}`}
+                  onClick={() => setJdModalTab(tab.key)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="jde-tab-toolbar">
+              <button className="ag-btn ag-btn--ghost ag-btn--sm" onClick={() => copyJDTab(jdModalTab)}>
+                📋 Copy
+              </button>
+            </div>
+            <div className="jde-tab-content jde-assets-modal-content">
+              {jdModalTab === 'jd'        && <FormattedJDTab   content={enhancement.formattedJD}            />}
+              {jdModalTab === 'brief'     && <RecruiterBriefTab content={enhancement.recruiterBrief}         />}
+              {jdModalTab === 'questions' && <ClarificationsTab content={enhancement.clarificationQuestions} />}
+              {jdModalTab === 'reachout'  && <ReachoutTab       content={enhancement.reachoutMaterial}       />}
+              {jdModalTab === 'keywords'  && <KeywordsTab       content={enhancement.sourcingKeywords}       />}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
