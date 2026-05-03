@@ -130,7 +130,7 @@ export default function WelcomeDashboard({ displayName, onNavigate }) {
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <div className="wd-hero">
         <h1 className="wd-greeting">{greeting}, {firstName}.</h1>
-        <p className="wd-subtitle">Welcome to Zeople — your AI-powered recruiting platform.</p>
+        <p className="wd-subtitle">Welcome to RecruiterOS — your AI-powered recruiting platform.</p>
       </div>
 
       {/* ── How to get started ───────────────────────────────────────────── */}

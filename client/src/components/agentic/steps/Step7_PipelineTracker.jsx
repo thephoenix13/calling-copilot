@@ -1,6 +1,93 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+
+// ── Voice Note Modal ─────────────────────────────────────────────────────────
+function VoiceNoteModal({ candidateName, existingNote, onSave, onClose }) {
+  const [transcript, setTranscript] = useState(existingNote || '');
+  const [recording,  setRecording]  = useState(false);
+  const [supported,  setSupported]  = useState(true);
+  const [saving,     setSaving]     = useState(false);
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setSupported(false); return; }
+    const rec = new SR();
+    rec.continuous     = true;
+    rec.interimResults = true;
+    rec.lang           = 'en-IN';
+
+    let finalSoFar = existingNote || '';
+
+    rec.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const chunk = e.results[i][0].transcript;
+        if (e.results[i].isFinal) { finalSoFar += (finalSoFar ? ' ' : '') + chunk; }
+        else interim += chunk;
+      }
+      setTranscript(finalSoFar + (interim ? ' ' + interim : ''));
+    };
+    rec.onerror = () => setRecording(false);
+    rec.onend   = () => { if (recording) rec.start(); };
+
+    recognitionRef.current = rec;
+    return () => { rec.stop(); };
+  }, []);
+
+  const toggleRecording = () => {
+    const rec = recognitionRef.current;
+    if (!rec) return;
+    if (recording) { rec.stop(); setRecording(false); }
+    else           { rec.start(); setRecording(true); }
+  };
+
+  const handleSave = async () => {
+    if (!transcript.trim()) return;
+    setSaving(true);
+    await onSave(transcript.trim());
+    setSaving(false);
+  };
+
+  return (
+    <div className="ag-modal-overlay" onClick={onClose}>
+      <div className="ag-modal voice-note-modal" onClick={e => e.stopPropagation()}>
+        <h3 className="ag-modal-title">🎙 Voice Note — {candidateName}</h3>
+        {!supported ? (
+          <p className="voice-note-unsupported">Speech recognition is not supported in this browser. Please use Chrome or Edge and type your note below.</p>
+        ) : (
+          <div className="voice-note-controls">
+            <button
+              className={`voice-record-btn${recording ? ' voice-record-btn--active' : ''}`}
+              onClick={toggleRecording}
+            >
+              {recording ? '⏹ Stop Recording' : '🎙 Start Recording'}
+            </button>
+            {recording && <span className="voice-recording-badge">● Recording…</span>}
+          </div>
+        )}
+        <textarea
+          className="ag-textarea voice-note-textarea"
+          placeholder="Transcript will appear here as you speak, or type manually…"
+          rows={6}
+          value={transcript}
+          onChange={e => setTranscript(e.target.value)}
+        />
+        <div className="ag-modal-actions">
+          <button className="ag-btn ag-btn--ghost" onClick={onClose} disabled={saving}>Cancel</button>
+          <button
+            className="ag-btn ag-btn--primary"
+            onClick={handleSave}
+            disabled={saving || !transcript.trim()}
+          >
+            {saving ? 'Saving…' : '💾 Save Note'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const POFU_BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -14,8 +101,9 @@ const COLUMNS = [
 const NEXT_LEVEL = { L1: 'L2', L2: 'L3', L3: 'selected' };
 
 export default function Step7_PipelineTracker({ session, authFetch, onRefresh }) {
-  const [feedback, setFeedback]   = useState({});
-  const [saving, setSaving]       = useState({});
+  const [feedback, setFeedback]     = useState({});
+  const [saving, setSaving]         = useState({});
+  const [voiceNoteFor, setVoiceNoteFor] = useState(null);
 
   // POFU enrollment modal
   const [pofuModal, setPofuModal] = useState(null); // sc object
@@ -88,6 +176,14 @@ export default function Step7_PipelineTracker({ session, authFetch, onRefresh })
     save(sc, { pipeline_feedback: text });
   };
 
+  const handleVoiceNoteSave = async (text) => {
+    const sc = voiceNoteFor;
+    if (!sc) return;
+    setFeedback(f => ({ ...f, [sc.id]: text }));
+    await save(sc, { pipeline_feedback: text });
+    setVoiceNoteFor(null);
+  };
+
   const cardsByColumn = COLUMNS.reduce((acc, col) => {
     acc[col.key] = proceeded.filter(sc => {
       if (col.key === 'selected') return sc.pipeline_status === 'selected';
@@ -129,6 +225,16 @@ export default function Step7_PipelineTracker({ session, authFetch, onRefresh })
                     {sc.pipeline_status === 'hold' && <div className="sw-card-hold-tag">⏸ On Hold</div>}
 
                     {/* Feedback */}
+                    <div className="sw-card-feedback-header">
+                      <span className="sw-card-feedback-label">Notes</span>
+                      <button
+                        className={`sw-voice-note-btn${(feedback[sc.id] ?? sc.pipeline_feedback) ? ' sw-voice-note-btn--has-note' : ''}`}
+                        onClick={() => setVoiceNoteFor(sc)}
+                        title="Record voice note"
+                      >
+                        🎙 {(feedback[sc.id] ?? sc.pipeline_feedback) ? 'Edit Note' : 'Voice Note'}
+                      </button>
+                    </div>
                     <textarea
                       className="sw-card-feedback"
                       placeholder="Interview feedback…"
@@ -193,6 +299,16 @@ export default function Step7_PipelineTracker({ session, authFetch, onRefresh })
             ))}
           </div>
         </div>
+      )}
+
+      {/* Voice note modal */}
+      {voiceNoteFor && (
+        <VoiceNoteModal
+          candidateName={voiceNoteFor.candidate_name}
+          existingNote={feedback[voiceNoteFor.id] ?? voiceNoteFor.pipeline_feedback ?? ''}
+          onSave={handleVoiceNoteSave}
+          onClose={() => setVoiceNoteFor(null)}
+        />
       )}
 
       {/* POFU enrolment modal */}

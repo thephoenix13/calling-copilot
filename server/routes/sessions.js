@@ -189,7 +189,7 @@ router.put('/:id', (req, res) => {
   const existing = ownershipCheck(req.params.id, req.user.id);
   if (!existing) return res.status(404).json({ error: 'Session not found.' });
 
-  const allowed = ['name', 'job_id', 'current_step', 'enhancement_data', 'enhancement_saved', 'status'];
+  const allowed = ['name', 'job_id', 'current_step', 'enhancement_data', 'enhancement_saved', 'status', 'vi_interview_id'];
   const sets    = [];
   const values  = [];
 
@@ -300,7 +300,7 @@ router.put('/:id/candidates/:candidateId', (req, res) => {
     'ai_interview_score', 'ai_interview_report_url',
     'decision', 'interview_level',
     'email_sent', 'pipeline_status', 'pipeline_feedback',
-    'resume_score',
+    'resume_score', 'vi_review',
   ];
 
   const sets   = [];

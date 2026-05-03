@@ -12,8 +12,20 @@ const NAV = [
   {
     section: 'Pipeline',
     items: [
-      { id: 'sessions', label: 'Pipeline Sessions', icon: IconGitBranch },
+      { id: 'sessions', label: 'Pipeline Sessions',    icon: IconGitBranch },
       { id: 'pofu',     label: 'Post Offer Follow-Up', icon: IconTarget, badge: 'Beta' },
+    ],
+  },
+  {
+    section: 'Evaluation',
+    items: [
+      { id: 'video-interviews', label: 'Video Interviews', icon: IconVideo },
+    ],
+  },
+  {
+    section: 'Insights',
+    items: [
+      { id: 'reports', label: 'Reports & Analytics', icon: IconBarChart },
     ],
   },
 ];
@@ -68,6 +80,24 @@ function IconGitBranch() {
     </svg>
   );
 }
+function IconVideo() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="nav-icon">
+      <polygon points="23 7 16 12 23 17 23 7"/>
+      <rect x="1" y="5" width="15" height="14" rx="2"/>
+    </svg>
+  );
+}
+function IconBarChart() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="nav-icon">
+      <line x1="18" y1="20" x2="18" y2="10"/>
+      <line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6"  y1="20" x2="6"  y2="14"/>
+      <line x1="2"  y1="20" x2="22" y2="20"/>
+    </svg>
+  );
+}
 function IconTarget() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="nav-icon">
@@ -103,9 +133,9 @@ export default function AppShell({ children, currentView, onNavigate, isLight, o
       <aside className="sidebar">
         {/* Logo */}
         <div className="sidebar-logo">
-          <div className="sidebar-logo-mark">Z</div>
+          <div className="sidebar-logo-mark">R</div>
           <div className="sidebar-logo-text">
-            <span className="sidebar-product">Zeople</span>
+            <span className="sidebar-product">RecruiterOS</span>
             <span className="sidebar-tagline">Recruiting AI</span>
           </div>
         </div>

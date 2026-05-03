@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   FormattedJDTab, RecruiterBriefTab, ClarificationsTab,
-  ReachoutTab, KeywordsTab, DownloadDialog, stripMarkers,
+  ReachoutTab, KeywordsTab, MarketIntelligenceTab, DownloadDialog, stripMarkers,
+  tryParse, CATEGORY_LABELS,
 } from './JDEnhancerTabs';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
@@ -13,6 +14,7 @@ const TABS = [
   { key: 'questions', label: 'Clarifications',  field: 'clarificationQuestions', editable: false },
   { key: 'reachout',  label: 'Reachout',        field: 'reachoutMaterial',       editable: true  },
   { key: 'keywords',  label: 'Keywords',        field: 'sourcingKeywords',       editable: false },
+  { key: 'market',    label: 'Market Intel',    field: 'marketIntelligence',     editable: false },
 ];
 
 const LOADING_STEPS = [
@@ -115,10 +117,31 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
   // Download
   const [showDownload, setShowDownload] = useState(false);
 
+  // Qualification flow
+  const [clarResponses, setClarResponses] = useState({});      // draft (what user is typing)
+  const [clarSavedResponses, setClarSavedResponses] = useState({}); // explicitly saved answers
+  const [regenQuestions, setRegenQuestions] = useState({});
+  const [qualifying, setQualifying] = useState(false);
+  const [qualified, setQualified] = useState(false);
+
   // Persist company script
   useEffect(() => {
     localStorage.setItem(LS_SCRIPT_KEY, companyScript);
   }, [companyScript]);
+
+  // Init clarification responses when questions change (preserves existing answers at each index)
+  useEffect(() => {
+    const parsed = tryParse(results.clarificationQuestions);
+    if (!parsed || typeof parsed !== 'object') return;
+    setClarResponses(prev => {
+      const next = {};
+      Object.keys(CATEGORY_LABELS).forEach(key => {
+        const qs = parsed[key] || [];
+        next[key] = qs.map((q, i) => prev[key]?.[i] ?? q.response ?? '');
+      });
+      return next;
+    });
+  }, [results.clarificationQuestions]);
 
   // ── Job select ─────────────────────────────────────────────────────────
   const handleJobSelect = (e) => {
@@ -340,7 +363,8 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
       const res = await authFetch(`${BACKEND_URL}/enhance-jd/saved/${item.id}`);
       const data = await res.json();
       if (data.item) {
-        setJdText(data.item.jd_input || '');
+        const jdInput = data.item.jd_input || '';
+        setJdText(jdInput);
         setClientNotes(data.item.client_notes || '');
         setResults(data.item.results || {});
         setSavedId(item.id);
@@ -349,6 +373,15 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
         setView('results');
         setActiveTab('jd');
         setEditingTab(null);
+        setParsedJob(null); // reset; will be lazily re-parsed on first on-demand action
+        // Silently restore parsedJob in background so regenerate/qualify/market work immediately
+        if (jdInput.trim()) {
+          authFetch(`${BACKEND_URL}/enhance-jd`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'parse_fields', description: jdInput }),
+          }).then(r => r.json()).then(d => { if (d.fields) setParsedJob(d.fields); }).catch(() => {});
+        }
       }
     } catch (err) {
       console.error(err);
@@ -378,7 +411,128 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
     setEditingTab(null);
     setActiveTab('jd');
     setLoadingError('');
+    setClarResponses({});
+    setClarSavedResponses({});
+    setQualified(false);
   };
+
+  // ── Market intelligence (on-demand) ───────────────────────────────────
+  const handleGenerateMarketIntel = useCallback(async () => {
+    setRegenerating(r => ({ ...r, market: true }));
+    try {
+      let job = parsedJob;
+      // parsedJob is null when loading a saved enhancement — re-parse from jdText
+      if (!job) {
+        if (!jdText.trim()) return;
+        const parseRes = await authFetch(`${BACKEND_URL}/enhance-jd`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'parse_fields', description: jdText }),
+        });
+        const parseData = await parseRes.json();
+        job = parseData.fields || {};
+        setParsedJob(job);
+      }
+      const res = await authFetch(`${BACKEND_URL}/enhance-jd`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job, fields: ['marketIntelligence'] }),
+      });
+      const data = await res.json();
+      if (data.marketIntelligence !== undefined) {
+        setResults(r => ({ ...r, marketIntelligence: data.marketIntelligence }));
+      }
+    } catch (err) {
+      console.error('Market intel error:', err);
+    } finally {
+      setRegenerating(r => ({ ...r, market: false }));
+    }
+  }, [parsedJob, jdText, authFetch]);
+
+  // ── Save a single clarification response ─────────────────────────────
+  const handleSaveResponse = useCallback((category, idx, value) => {
+    setClarSavedResponses(r => ({
+      ...r,
+      [category]: Object.assign([...(r[category] || [])], { [idx]: value }),
+    }));
+  }, []);
+
+  // ── Per-question regeneration ──────────────────────────────────────────
+  const handleRegenQuestion = useCallback(async (category, idx, question, rationale) => {
+    if (!parsedJob) return;
+    const loadKey = `${category}-${idx}`;
+    setRegenQuestions(r => ({ ...r, [loadKey]: true }));
+    try {
+      const res = await authFetch(`${BACKEND_URL}/enhance-jd/regen-question`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job: parsedJob, category, questionIndex: idx, question, rationale }),
+      });
+      const data = await res.json();
+      if (data.question) {
+        setResults(r => {
+          const cq = tryParse(r.clarificationQuestions);
+          if (!cq || !cq[category]) return r;
+          const updated = { ...cq, [category]: [...cq[category]] };
+          updated[category][idx] = { ...updated[category][idx], question: data.question, rationale: data.rationale || updated[category][idx].rationale };
+          return { ...r, clarificationQuestions: updated };
+        });
+      }
+    } catch (err) {
+      console.error('regen-question error:', err);
+    } finally {
+      setRegenQuestions(r => ({ ...r, [loadKey]: false }));
+    }
+  }, [parsedJob, authFetch]);
+
+  // ── Mark as Qualified & Refresh All Assets ────────────────────────────
+  const handleQualifyAndRefresh = useCallback(async () => {
+    if (!parsedJob) return;
+    setQualifying(true);
+
+    // Build Q&A notes from explicitly saved responses
+    const parsed = tryParse(results.clarificationQuestions);
+    const qaLines = [];
+    if (parsed) {
+      Object.entries(CATEGORY_LABELS).forEach(([key, label]) => {
+        const qs = parsed[key] || [];
+        qs.forEach((q, i) => {
+          const response = clarSavedResponses[key]?.[i];
+          if (response?.trim()) {
+            qaLines.push(`[${label}] Q: ${q.question}`);
+            qaLines.push(`A: ${response}`);
+            qaLines.push('');
+          }
+        });
+      });
+    }
+    const qaNotes = qaLines.length > 0 ? `Qualification Call Q&A:\n${qaLines.join('\n')}` : '';
+    const combinedNotes = [clientNotes, qaNotes].filter(Boolean).join('\n\n');
+
+    try {
+      const res = await authFetch(`${BACKEND_URL}/enhance-jd`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          job: parsedJob,
+          clientNotes: combinedNotes || undefined,
+          companyScript: companyScript || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error('Refresh failed.');
+      const data = await res.json();
+      setResults(r => ({ ...r, ...data }));
+      setQualified(true);
+      // If a DB job was selected, mark it as qualified
+      if (selectedJobId) {
+        await authFetch(`${BACKEND_URL}/jobs/${selectedJobId}/qualify`, { method: 'PATCH' }).catch(() => {});
+      }
+    } catch (err) {
+      console.error('qualify error:', err);
+    } finally {
+      setQualifying(false);
+    }
+  }, [parsedJob, clientNotes, companyScript, results.clarificationQuestions, clarResponses, selectedJobId, authFetch]);
 
   // ── Derived ────────────────────────────────────────────────────────────
   const activeTabObj    = TABS.find(t => t.key === activeTab);
@@ -440,7 +594,7 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
                 onClick={() => { setActiveTab(tab.key); setEditingTab(null); }}
               >
                 {tab.label}
-                {results[tab.field] == null && <span className="jde-tab-missing">⚠</span>}
+                {results[tab.field] == null && tab.key !== 'market' && <span className="jde-tab-missing">⚠</span>}
               </button>
             ))}
           </div>
@@ -481,6 +635,31 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
             </button>
           </div>
 
+          {/* Qualify bar — shown only on the Clarifications tab */}
+          {activeTab === 'questions' && (() => {
+            const hasSaved = Object.values(clarSavedResponses).some(
+              arr => Array.isArray(arr) && arr.some(v => v?.trim())
+            );
+            return (
+              <div className="jde-qualify-bar">
+                <div className="jde-qualify-bar-text">
+                  {qualified
+                    ? '✓ Qualified — all assets have been refreshed with saved client responses.'
+                    : hasSaved
+                    ? 'You have saved responses. Click to refresh all assets with this context.'
+                    : 'Save at least one client response above to enable qualification.'}
+                </div>
+                <button
+                  className={`ag-btn ag-btn--sm jde-qualify-btn${qualified ? ' jde-qualify-btn--done' : ''}`}
+                  onClick={handleQualifyAndRefresh}
+                  disabled={qualifying || !hasSaved}
+                >
+                  {qualifying ? '⟳ Refreshing All Assets…' : qualified ? '✓ Refresh Again' : '✓ Mark as Qualified & Refresh All'}
+                </button>
+              </div>
+            );
+          })()}
+
           {/* Tab content */}
           <div className="jde-tab-content">
             {activeTab === 'jd' && (
@@ -499,7 +678,19 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
                 onEditChange={setEditDraft}
               />
             )}
-            {activeTab === 'questions' && <ClarificationsTab content={activeContent} />}
+            {activeTab === 'questions' && (
+              <ClarificationsTab
+                content={activeContent}
+                responses={clarResponses}
+                onResponseChange={(cat, idx, val) =>
+                  setClarResponses(r => ({ ...r, [cat]: Object.assign([...(r[cat] || [])], { [idx]: val }) }))
+                }
+                savedResponses={clarSavedResponses}
+                onSaveResponse={handleSaveResponse}
+                onRegenQuestion={handleRegenQuestion}
+                regenQuestions={regenQuestions}
+              />
+            )}
             {activeTab === 'reachout' && (
               <ReachoutTab
                 content={activeContent}
@@ -509,6 +700,13 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
               />
             )}
             {activeTab === 'keywords' && <KeywordsTab content={activeContent} />}
+            {activeTab === 'market' && (
+              <MarketIntelligenceTab
+                content={activeContent}
+                onGenerate={handleGenerateMarketIntel}
+                generating={!!regenerating.market}
+              />
+            )}
           </div>
 
           {/* Modals */}
@@ -681,7 +879,7 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
                     className="ag-textarea"
                     value={companyScript}
                     onChange={e => setCompanyScript(e.target.value)}
-                    placeholder="e.g., 'Hi, I'm reaching out from Zeople AI, a recruitment firm specialising in tech and product roles across India…'"
+                    placeholder="e.g., 'Hi, I'm reaching out from RecruiterOS, a recruitment firm specialising in tech and product roles across India…'"
                     rows={4}
                   />
                 </div>

@@ -82,6 +82,14 @@ db.exec(`
     updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
+`);
+
+// Add is_qualified column if it doesn't exist (safe migration)
+try {
+  db.exec(`ALTER TABLE jobs ADD COLUMN is_qualified INTEGER NOT NULL DEFAULT 0;`);
+} catch (_) {}
+
+db.exec(`
 
   CREATE TABLE IF NOT EXISTS candidates (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -189,6 +197,112 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_pofu_emails_candidate ON pofu_emails(pofu_candidate_id);
 `);
+
+// ── Video Interview tables ────────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS video_interviews (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    job_id          INTEGER REFERENCES jobs(id),
+    title           TEXT    NOT NULL,
+    job_description TEXT    NOT NULL DEFAULT '',
+    question_count  INTEGER NOT NULL DEFAULT 5,
+    expiry_date     TEXT,
+    status          TEXT    NOT NULL DEFAULT 'active'
+                    CHECK(status IN ('draft','active','closed')),
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_vi_user ON video_interviews(user_id);
+
+  CREATE TABLE IF NOT EXISTS video_interview_questions (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    interview_id           INTEGER NOT NULL REFERENCES video_interviews(id) ON DELETE CASCADE,
+    question_text          TEXT    NOT NULL,
+    question_type          TEXT    NOT NULL DEFAULT 'behavioral'
+                           CHECK(question_type IN ('technical','behavioral','situational')),
+    estimated_time_minutes INTEGER NOT NULL DEFAULT 3,
+    order_number           INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_viq_interview ON video_interview_questions(interview_id);
+
+  CREATE TABLE IF NOT EXISTS video_candidates (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    interview_id           INTEGER NOT NULL REFERENCES video_interviews(id) ON DELETE CASCADE,
+    candidate_id           INTEGER REFERENCES candidates(id),
+    name                   TEXT    NOT NULL,
+    email                  TEXT    NOT NULL,
+    phone                  TEXT,
+    access_code            TEXT    NOT NULL UNIQUE,
+    status                 TEXT    NOT NULL DEFAULT 'invited'
+                           CHECK(status IN ('invited','in_progress','completed','evaluated')),
+    interview_started_at   TEXT,
+    interview_completed_at TEXT,
+    created_at             TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_vc_interview ON video_candidates(interview_id);
+
+  CREATE TABLE IF NOT EXISTS video_responses (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_id    INTEGER NOT NULL REFERENCES video_candidates(id) ON DELETE CASCADE,
+    interview_id    INTEGER NOT NULL REFERENCES video_interviews(id),
+    question_id     INTEGER NOT NULL REFERENCES video_interview_questions(id),
+    video_filename  TEXT,
+    video_duration  INTEGER,
+    file_size       INTEGER,
+    transcription   TEXT,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_vr_candidate ON video_responses(candidate_id);
+
+  CREATE TABLE IF NOT EXISTS video_evaluations (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_id          INTEGER NOT NULL REFERENCES video_candidates(id) ON DELETE CASCADE,
+    interview_id          INTEGER NOT NULL REFERENCES video_interviews(id),
+    overall_score         INTEGER,
+    hiring_recommendation TEXT,
+    evaluation_summary    TEXT,
+    strengths             TEXT    NOT NULL DEFAULT '[]',
+    weaknesses            TEXT    NOT NULL DEFAULT '[]',
+    competency_scores     TEXT,
+    behavioral_insights   TEXT,
+    created_at            TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_ve_candidate ON video_evaluations(candidate_id);
+
+  CREATE TABLE IF NOT EXISTS video_question_evaluations (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    evaluation_id          INTEGER NOT NULL REFERENCES video_evaluations(id) ON DELETE CASCADE,
+    question_id            INTEGER NOT NULL REFERENCES video_interview_questions(id),
+    score                  INTEGER,
+    relevance_score        INTEGER,
+    clarity_score          INTEGER,
+    completeness_score     INTEGER,
+    analysis               TEXT,
+    keywords_found         TEXT    NOT NULL DEFAULT '[]',
+    response_transcription TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_vqe_evaluation ON video_question_evaluations(evaluation_id);
+`);
+
+// ── Safe column migrations ─────────────────────────────────────────────────────
+// vi_interview_id on sessions — inserted when VI Scheduler step was added;
+// also triggers a one-time shift of current_step for existing sessions.
+let viSchedulerMigrationRan = false;
+try {
+  db.exec('ALTER TABLE sessions ADD COLUMN vi_interview_id INTEGER');
+  viSchedulerMigrationRan = true;
+} catch (_) {}
+
+if (viSchedulerMigrationRan) {
+  // Shift sessions that were already past step 4 to account for the new step 5
+  const shifted = db.prepare('UPDATE sessions SET current_step = current_step + 1 WHERE current_step >= 5').run();
+  if (shifted.changes > 0) console.log(`[migration] Shifted current_step for ${shifted.changes} session(s) (VI Scheduler step insertion)`);
+}
+
+try { db.exec('ALTER TABLE session_candidates ADD COLUMN vi_invite_sent INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
+try { db.exec('ALTER TABLE session_candidates ADD COLUMN vi_invite_sent_at TEXT'); } catch (_) {}
+try { db.exec("ALTER TABLE session_candidates ADD COLUMN vi_review TEXT"); } catch (_) {}
 
 async function seedUsers() {
   const users = [

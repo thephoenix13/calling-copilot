@@ -240,9 +240,88 @@ ${description}`;
   return parseJSON(raw);
 }
 
+async function genMarketIntelligence(job) {
+  const ctx = buildJobContext(job, null);
+  const sys = `You are a talent market analyst specialising in Indian recruitment. Provide realistic, data-driven market intelligence based on current hiring trends.`;
+
+  const user = `Generate market intelligence for this job role in India (2025). Return ONLY valid JSON.
+
+Schema:
+{
+  "salaryBenchmarks": {
+    "junior": { "min": number, "max": number, "label": "0-3 years" },
+    "mid":    { "min": number, "max": number, "label": "3-6 years" },
+    "senior": { "min": number, "max": number, "label": "6+ years" }
+  },
+  "demandSignal": "high|medium|low",
+  "demandRationale": "2-3 sentences on talent supply vs demand in India",
+  "competitorHiring": ["5-7 companies actively hiring for similar profiles"],
+  "hotSkills": [{ "skill": "...", "trend": "rising|stable|declining" }],
+  "sourcingChannels": [
+    { "channel": "Naukri|LinkedIn|GitHub|etc", "priority": "primary|secondary", "tip": "one actionable tip" }
+  ],
+  "candidateExpectations": ["4-6 key expectations candidates in this segment typically have"],
+  "avgNoticePeriod": "e.g. 30-60 days",
+  "availabilityScore": "high|medium|low",
+  "availabilityNotes": "1-2 sentences on candidate availability and competition"
+}
+
+All salaries in LPA. Be realistic for the Indian market.
+
+---
+${ctx}`;
+
+  const raw = await callAI(sys, user, 2000, 0.6);
+  return parseJSON(raw);
+}
+
 // ── Routes ───────────────────────────────────────────────────────────────────
 
-const ALL_FIELDS = ['formattedJD', 'recruiterBrief', 'clarificationQuestions', 'reachoutMaterial', 'sourcingKeywords'];
+const STANDARD_FIELDS = ['formattedJD', 'recruiterBrief', 'clarificationQuestions', 'reachoutMaterial', 'sourcingKeywords'];
+const ALL_FIELDS = [...STANDARD_FIELDS, 'marketIntelligence'];
+
+const CATEGORY_LABELS = {
+  domainAndIndustry:       'Domain & Industry',
+  primarySkills:           'Primary Skills',
+  secondarySkills:         'Secondary Skills',
+  projectsAndExperience:   'Projects & Experience',
+  processAndTimeline:      'Process & Timeline',
+  compensationAndBenefits: 'Compensation & Benefits',
+  otherClarifications:     'Other Clarifications',
+};
+
+// POST /regen-question — regenerate a single clarification question
+router.post('/regen-question', async (req, res) => {
+  const { job, category, questionIndex, question, rationale, instruction } = req.body;
+  if (!job || !category || !question) return res.status(400).json({ error: 'job, category, and question are required.' });
+
+  const categoryLabel = CATEGORY_LABELS[category] || category;
+  const ctx = buildJobContext(job, null);
+
+  const sys = `You are a recruitment clarification specialist for Indian staffing. Generate targeted, specific clarification questions that recruiters ask clients before sourcing begins.`;
+  const user = `Regenerate the following clarification question for the category "${categoryLabel}".
+
+Current question: "${question}"
+Current rationale: "${rationale || 'N/A'}"
+${instruction ? `\nImprovement instruction: ${instruction}` : '\nMake the question more specific, actionable, and relevant to the job context.'}
+
+Return ONLY valid JSON (no markdown fences):
+{ "question": "...", "rationale": "..." }
+
+Job context:
+---
+${ctx}`;
+
+  try {
+    const raw = await callAI(sys, user, 500, 0.7);
+    const parsed = parseJSON(raw);
+    if (parsed && parsed.question) return res.json(parsed);
+    res.status(500).json({ error: 'Could not parse regenerated question.' });
+  } catch (err) {
+    console.error('regen-question error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // POST / — generate assets (or parse_fields)
 router.post('/', async (req, res) => {
@@ -260,7 +339,7 @@ router.post('/', async (req, res) => {
 
   if (!job) return res.status(400).json({ error: 'job object is required.' });
 
-  const toGenerate = fields?.length ? fields.filter(f => ALL_FIELDS.includes(f)) : ALL_FIELDS;
+  const toGenerate = fields?.length ? fields.filter(f => ALL_FIELDS.includes(f)) : STANDARD_FIELDS;
 
   const generators = {
     formattedJD:            () => genFormattedJD(job, clientNotes, manualInput),
@@ -268,6 +347,7 @@ router.post('/', async (req, res) => {
     clarificationQuestions: () => genClarificationQuestions(job, clientNotes, manualInput),
     reachoutMaterial:       () => genReachoutMaterial(job, clientNotes, companyScript, manualInput),
     sourcingKeywords:       () => genSourcingKeywords(job, clientNotes, manualInput),
+    marketIntelligence:     () => genMarketIntelligence(job),
   };
 
   const results = {};

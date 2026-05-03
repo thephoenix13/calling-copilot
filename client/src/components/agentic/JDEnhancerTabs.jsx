@@ -67,7 +67,7 @@ function renderMd(text) {
 }
 
 // Try to JSON-parse a value that might be a raw string (possibly with markdown fences)
-function tryParse(value) {
+export function tryParse(value) {
   if (typeof value !== 'string') return value;
   try { return JSON.parse(value.trim()); } catch {}
   // Strip markdown code fences the AI sometimes adds despite being told not to
@@ -108,7 +108,7 @@ export function RecruiterBriefTab({ content, editing, editDraft, onEditChange })
 }
 
 // ── Tab: Clarification Questions ─────────────────────────────────────────────
-const CATEGORY_LABELS = {
+export const CATEGORY_LABELS = {
   domainAndIndustry:       'Domain & Industry',
   primarySkills:           'Primary Skills',
   secondarySkills:         'Secondary Skills',
@@ -118,7 +118,7 @@ const CATEGORY_LABELS = {
   otherClarifications:     'Other Clarifications',
 };
 
-export function ClarificationsTab({ content }) {
+export function ClarificationsTab({ content, responses, onResponseChange, onSaveResponse, savedResponses, onRegenQuestion, regenQuestions }) {
   const data = tryParse(content);
 
   if (!data || typeof data !== 'object') {
@@ -138,15 +138,86 @@ export function ClarificationsTab({ content }) {
           <div key={key} className="jde-clar-category">
             <h4 className="jde-clar-category-title">{label}</h4>
             <div className="jde-clar-questions">
+              {questions.map((q, i) => {
+                const loadKey  = `${key}-${i}`;
+                const isRegening = regenQuestions?.[loadKey];
+                const draft    = responses?.[key]?.[i] ?? q.response ?? '';
+                const saved    = savedResponses?.[key]?.[i] ?? '';
+                const isSaved  = !!saved.trim();
+                const isAlreadySaved = draft.trim() === saved.trim() && isSaved;
+
+                return (
+                  <div key={i} className={`jde-clar-card${isSaved ? ' jde-clar-card--saved' : ''}`}>
+                    <div className="jde-clar-q-row">
+                      <div className="jde-clar-q">{q.question}</div>
+                      <div className="jde-clar-q-actions">
+                        {isSaved && <span className="jde-clar-saved-badge">✓ Saved</span>}
+                        {onRegenQuestion && (
+                          <button
+                            className="jde-clar-regen-btn"
+                            onClick={() => onRegenQuestion(key, i, q.question, q.rationale)}
+                            disabled={isRegening}
+                            title="Regenerate this question"
+                          >
+                            {isRegening ? '⟳' : '↺'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {q.rationale && <div className="jde-clar-rationale">{q.rationale}</div>}
+                    <textarea
+                      className="jde-clar-response"
+                      placeholder="Type client's response here…"
+                      rows={2}
+                      value={draft}
+                      onChange={e => onResponseChange?.(key, i, e.target.value)}
+                    />
+                    {draft.trim() && (
+                      <div className="jde-clar-save-row">
+                        <button
+                          className={`jde-clar-save-btn${isAlreadySaved ? ' jde-clar-save-btn--saved' : ''}`}
+                          onClick={() => onSaveResponse?.(key, i, draft)}
+                          disabled={isAlreadySaved}
+                        >
+                          {isAlreadySaved ? '✓ Saved' : '💾 Save Answer'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Tab: Clarifications (read-only) — used in pipeline modal ─────────────────
+export function ClarificationsReadOnly({ content }) {
+  const data = tryParse(content);
+  if (!data || typeof data !== 'object') {
+    return <div className="jde-tab-empty">{content ? <div className="jde-md-wrap">{renderMd(String(content))}</div> : 'No clarification questions generated.'}</div>;
+  }
+  return (
+    <div className="jde-clarifications">
+      {Object.entries(CATEGORY_LABELS).map(([key, label]) => {
+        const questions = data[key];
+        if (!questions?.length) return null;
+        return (
+          <div key={key} className="jde-clar-category">
+            <h4 className="jde-clar-category-title">{label}</h4>
+            <div className="jde-clar-questions">
               {questions.map((q, i) => (
-                <div key={i} className="jde-clar-card">
+                <div key={i} className={`jde-clar-card${q.response ? ' jde-clar-card--saved' : ''}`}>
                   <div className="jde-clar-q">{q.question}</div>
                   {q.rationale && <div className="jde-clar-rationale">{q.rationale}</div>}
-                  <input
-                    className="jde-clar-response"
-                    placeholder="Client response…"
-                    defaultValue={q.response || ''}
-                  />
+                  {q.response && (
+                    <div className="jde-clar-response-readonly">
+                      <span className="jde-clar-saved-badge">✓ Response</span> {q.response}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -267,10 +338,10 @@ export function KeywordsTab({ content }) {
           </div>
         </div>
       )}
-      {booleanStrings?.length > 0 && (
+      {skillOnlyBooleanStrings?.length > 0 && (
         <div className="jde-kw-section">
-          <div className="jde-kw-label">Boolean Search Strings</div>
-          {booleanStrings.map((s, i) => (
+          <div className="jde-kw-label">Skills-Only Boolean Strings</div>
+          {skillOnlyBooleanStrings.map((s, i) => (
             <div key={i} className="jde-bool-row">
               <code className="jde-bool-code">{s}</code>
               <button className="jde-bool-copy" onClick={() => copyText(s)}>Copy</button>
@@ -278,10 +349,10 @@ export function KeywordsTab({ content }) {
           ))}
         </div>
       )}
-      {skillOnlyBooleanStrings?.length > 0 && (
+      {booleanStrings?.length > 0 && (
         <div className="jde-kw-section">
-          <div className="jde-kw-label">Skills-Only Boolean Strings</div>
-          {skillOnlyBooleanStrings.map((s, i) => (
+          <div className="jde-kw-label">Boolean Search Strings</div>
+          {booleanStrings.map((s, i) => (
             <div key={i} className="jde-bool-row">
               <code className="jde-bool-code">{s}</code>
               <button className="jde-bool-copy" onClick={() => copyText(s)}>Copy</button>
@@ -295,6 +366,136 @@ export function KeywordsTab({ content }) {
           <div className="jde-kw-chips">
             {exclusions.map(k => <span key={k} className="skill-chip jde-kw-exclusion">{k}</span>)}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Tab: Market Intelligence ─────────────────────────────────────────────────
+const DEMAND_COLORS = { high: 'var(--emerald)', medium: '#f59e0b', low: '#ef4444' };
+const TREND_LABELS  = { rising: '↑ Rising', stable: '→ Stable', declining: '↓ Declining' };
+const TREND_COLORS  = { rising: 'var(--emerald)', stable: 'var(--text-2)', declining: '#f87171' };
+
+export function MarketIntelligenceTab({ content, onGenerate, generating }) {
+  if (generating) {
+    return (
+      <div className="jde-tab-empty" style={{ flexDirection: 'column', gap: 12, padding: '3rem' }}>
+        <span className="spinner" style={{ width: 24, height: 24 }} />
+        <span style={{ color: 'var(--text-2)', fontSize: 13 }}>Analysing market data…</span>
+      </div>
+    );
+  }
+
+  if (!content) {
+    return (
+      <div className="jde-tab-empty" style={{ flexDirection: 'column', gap: 14, padding: '3rem', textAlign: 'center' }}>
+        <div style={{ fontSize: 32 }}>📊</div>
+        <p style={{ color: 'var(--text-2)', fontSize: 14, margin: 0 }}>
+          Get salary benchmarks, demand signals, competitor activity, and sourcing tips for this role.
+        </p>
+        <button className="ag-btn ag-btn--primary" onClick={onGenerate}>Generate Market Intelligence</button>
+      </div>
+    );
+  }
+
+  const d = typeof content === 'string' ? (() => { try { return JSON.parse(content); } catch { return null; } })() : content;
+  if (!d) return <div className="jde-tab-empty">Could not parse market intelligence data.</div>;
+
+  return (
+    <div className="jde-mi-wrap">
+      {/* Demand signal */}
+      {d.demandSignal && (
+        <div className="jde-mi-card">
+          <div className="jde-mi-card-title">Demand Signal</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+            <span style={{
+              fontSize: 13, fontWeight: 700, padding: '4px 14px', borderRadius: 20,
+              background: `${DEMAND_COLORS[d.demandSignal]}20`,
+              color: DEMAND_COLORS[d.demandSignal],
+              border: `1px solid ${DEMAND_COLORS[d.demandSignal]}40`,
+            }}>{d.demandSignal.toUpperCase()}</span>
+            {d.availabilityScore && (
+              <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                Availability: <strong style={{ color: DEMAND_COLORS[d.availabilityScore] }}>{d.availabilityScore}</strong>
+              </span>
+            )}
+          </div>
+          {d.demandRationale && <p className="jde-mi-text">{d.demandRationale}</p>}
+          {d.availabilityNotes && <p className="jde-mi-text">{d.availabilityNotes}</p>}
+          {d.avgNoticePeriod && (
+            <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 6 }}>
+              Avg notice period: <strong style={{ color: 'var(--text-1)' }}>{d.avgNoticePeriod}</strong>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Salary benchmarks */}
+      {d.salaryBenchmarks && (
+        <div className="jde-mi-card">
+          <div className="jde-mi-card-title">Salary Benchmarks (LPA)</div>
+          <div className="jde-mi-salary-grid">
+            {Object.values(d.salaryBenchmarks).map((tier, i) => (
+              <div key={i} className="jde-mi-salary-tier">
+                <div className="jde-mi-tier-label">{tier.label}</div>
+                <div className="jde-mi-tier-range">₹{tier.min}–{tier.max}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Hot skills */}
+      {d.hotSkills?.length > 0 && (
+        <div className="jde-mi-card">
+          <div className="jde-mi-card-title">Skill Trends</div>
+          <div className="jde-mi-skill-grid">
+            {d.hotSkills.map((hs, i) => (
+              <div key={i} className="jde-mi-skill-row">
+                <span className="jde-mi-skill-name">{hs.skill}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: TREND_COLORS[hs.trend] }}>
+                  {TREND_LABELS[hs.trend] || hs.trend}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sourcing channels */}
+      {d.sourcingChannels?.length > 0 && (
+        <div className="jde-mi-card">
+          <div className="jde-mi-card-title">Sourcing Channels</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {d.sourcingChannels.map((ch, i) => (
+              <div key={i} className="jde-mi-channel-row">
+                <span className="jde-mi-channel-name">{ch.channel}</span>
+                {ch.priority === 'primary' && <span className="jde-mi-primary-badge">Primary</span>}
+                {ch.tip && <span className="jde-mi-channel-tip">{ch.tip}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Competitor hiring */}
+      {d.competitorHiring?.length > 0 && (
+        <div className="jde-mi-card">
+          <div className="jde-mi-card-title">Competitor Hiring</div>
+          <div className="jde-kw-chips">
+            {d.competitorHiring.map((co, i) => <span key={i} className="skill-chip jde-kw-secondary">{co}</span>)}
+          </div>
+        </div>
+      )}
+
+      {/* Candidate expectations */}
+      {d.candidateExpectations?.length > 0 && (
+        <div className="jde-mi-card">
+          <div className="jde-mi-card-title">What Candidates Expect</div>
+          <ul className="jde-mi-list">
+            {d.candidateExpectations.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
         </div>
       )}
     </div>

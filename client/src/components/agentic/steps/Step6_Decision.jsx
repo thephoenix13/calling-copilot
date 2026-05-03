@@ -52,7 +52,7 @@ export default function Step6_Decision({ session, authFetch, onComplete, onRefre
   };
 
   const handleContinue = async () => {
-    await onComplete({}, 7);
+    await onComplete({}, 8);
   };
 
   return (

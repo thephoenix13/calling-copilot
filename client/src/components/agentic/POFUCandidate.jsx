@@ -62,9 +62,10 @@ export default function POFUCandidate({ candidateId, authFetch, isLight, onToggl
   const [sendMsg, setSendMsg]     = useState('');
 
   // Log reply panel
-  const [replyOpen, setReplyOpen] = useState(false);
-  const [replyBody, setReplyBody] = useState('');
+  const [replyOpen, setReplyOpen]   = useState(false);
+  const [replyBody, setReplyBody]   = useState('');
   const [replyLogging, setReplyLogging] = useState(false);
+  const [replyToSubject, setReplyToSubject] = useState('');
 
   const fetchCandidate = useCallback(async () => {
     try {
@@ -290,6 +291,12 @@ export default function POFUCandidate({ candidateId, authFetch, isLight, onToggl
                     <span className="pofu-email-date">
                       {new Date(em.sent_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </span>
+                    {em.direction === 'outbound' && (
+                      <button
+                        className="pofu-log-reply-btn"
+                        onClick={() => { setReplyToSubject(em.subject || ''); setReplyBody(''); setReplyOpen(true); }}
+                      >↩ Log Reply</button>
+                    )}
                   </div>
                   {em.subject && <div className="pofu-email-subject">{em.subject}</div>}
                   {em.body && (
@@ -343,6 +350,11 @@ export default function POFUCandidate({ candidateId, authFetch, isLight, onToggl
         <div className="ag-modal-overlay" onClick={() => setReplyOpen(false)}>
           <div className="ag-modal" style={{ width: 480 }} onClick={e => e.stopPropagation()}>
             <h3 className="ag-modal-title">Log Candidate Reply</h3>
+            {replyToSubject && (
+              <div style={{ fontSize: 12, color: 'var(--text-2)', background: 'var(--bg-sunken)', borderRadius: 6, padding: '6px 10px', marginBottom: 12 }}>
+                Re: {replyToSubject}
+              </div>
+            )}
             <label className="pofu-cand-label">What did the candidate say?</label>
             <textarea
               className="ag-input"

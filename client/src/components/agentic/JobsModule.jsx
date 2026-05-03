@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -204,6 +204,170 @@ function JobForm({ job, onSave, onCancel, authFetch }) {
   );
 }
 
+// ── Bulk JD Upload modal ─────────────────────────────────────────────────────
+const FILE_STATES = { queued: 'queued', extracting: 'extracting', parsing: 'parsing', creating: 'creating', done: 'done', error: 'error' };
+
+function BulkUploadModal({ authFetch, onDone, onClose }) {
+  const fileRef  = useRef(null);
+  const [files,  setFiles]  = useState([]);   // [{ file, name, state, error }]
+  const [running, setRunning] = useState(false);
+
+  const MAX_FILES = 10;
+  const addFiles = (picked) => {
+    const next = Array.from(picked).map(f => ({ file: f, name: f.name, state: FILE_STATES.queued, error: '' }));
+    setFiles(prev => {
+      const combined = [...prev, ...next];
+      return combined.slice(0, MAX_FILES);
+    });
+  };
+
+  const removeFile = (i) => setFiles(prev => prev.filter((_, idx) => idx !== i));
+
+  const setFileState = (i, patch) =>
+    setFiles(prev => prev.map((f, idx) => idx === i ? { ...f, ...patch } : f));
+
+  const runUpload = async () => {
+    if (!files.length || running) return;
+    setRunning(true);
+    let created = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const { file } = files[i];
+
+      // 1. Extract text
+      setFileState(i, { state: FILE_STATES.extracting });
+      let text = '';
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const r = await authFetch(`${BACKEND_URL}/enhance-jd/extract-text`, { method: 'POST', body: fd });
+        if (!r.ok) throw new Error('Text extraction failed');
+        const d = await r.json();
+        text = d.text || '';
+        if (!text.trim()) throw new Error('No text found in file');
+      } catch (err) {
+        setFileState(i, { state: FILE_STATES.error, error: err.message });
+        continue;
+      }
+
+      // 2. Parse structured fields
+      setFileState(i, { state: FILE_STATES.parsing });
+      let fields = {};
+      try {
+        const r = await authFetch(`${BACKEND_URL}/enhance-jd`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'parse_fields', description: text }),
+        });
+        if (!r.ok) throw new Error('Field parsing failed');
+        const d = await r.json();
+        fields = d.fields || {};
+        if (!fields.title) throw new Error('Could not extract job title');
+      } catch (err) {
+        setFileState(i, { state: FILE_STATES.error, error: err.message });
+        continue;
+      }
+
+      // 3. Create job
+      setFileState(i, { state: FILE_STATES.creating });
+      try {
+        const r = await authFetch(`${BACKEND_URL}/jobs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title:           fields.title        || file.name.replace(/\.[^.]+$/, ''),
+            department:      fields.department   || null,
+            client_name:     fields.client_name  || null,
+            location:        fields.location     || null,
+            employment_type: fields.employment_type || 'Full-time',
+            description:     fields.description  || text.slice(0, 8000),
+            experience_min:  fields.experience_min  != null ? Number(fields.experience_min)  : null,
+            experience_max:  fields.experience_max  != null ? Number(fields.experience_max)  : null,
+            salary_min:      fields.salary_min      != null ? Number(fields.salary_min)      : null,
+            salary_max:      fields.salary_max      != null ? Number(fields.salary_max)      : null,
+            openings_count:  fields.openings_count  != null ? Number(fields.openings_count)  : 1,
+            required_skills:  Array.isArray(fields.required_skills)  ? fields.required_skills  : [],
+            preferred_skills: Array.isArray(fields.preferred_skills) ? fields.preferred_skills : [],
+            status: 'active',
+          }),
+        });
+        if (!r.ok) throw new Error('Job creation failed');
+        setFileState(i, { state: FILE_STATES.done });
+        created++;
+      } catch (err) {
+        setFileState(i, { state: FILE_STATES.error, error: err.message });
+      }
+    }
+
+    setRunning(false);
+    if (created > 0) onDone();
+  };
+
+  const allDone  = files.length > 0 && files.every(f => f.state === FILE_STATES.done || f.state === FILE_STATES.error);
+  const canStart = files.some(f => f.state === FILE_STATES.queued) && !running;
+
+  const stateLabel = { queued: 'Queued', extracting: 'Extracting…', parsing: 'Parsing fields…', creating: 'Creating job…', done: '✓ Done', error: '✗ Error' };
+  const stateCls   = { queued: '', extracting: 'bulk-file--active', parsing: 'bulk-file--active', creating: 'bulk-file--active', done: 'bulk-file--done', error: 'bulk-file--error' };
+
+  return (
+    <div className="ag-modal-overlay" onClick={!running ? onClose : undefined}>
+      <div className="ag-modal bulk-upload-modal" onClick={e => e.stopPropagation()}>
+        <h3 className="ag-modal-title">Bulk Upload Job Descriptions</h3>
+        <p className="bulk-upload-hint">Upload PDF, DOCX, or TXT files. Each file is parsed and a new job is created automatically.</p>
+
+        {/* Drop zone */}
+        <div
+          className={`bulk-drop-zone${files.length >= MAX_FILES ? ' bulk-drop-zone--full' : ''}`}
+          onClick={() => files.length < MAX_FILES && fileRef.current?.click()}
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
+        >
+          <span className="bulk-drop-icon">📂</span>
+          <span className="bulk-drop-text">
+            {files.length >= MAX_FILES ? 'Limit reached — remove a file to add more' : 'Click to select files or drag & drop here'}
+          </span>
+          <span className="bulk-drop-sub">PDF · DOCX · TXT · {files.length}/{MAX_FILES} files</span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,.docx,.txt"
+            multiple
+            style={{ display: 'none' }}
+            onChange={e => { addFiles(e.target.files); e.target.value = ''; }}
+          />
+        </div>
+
+        {/* File list */}
+        {files.length > 0 && (
+          <div className="bulk-file-list">
+            {files.map((f, i) => (
+              <div key={i} className={`bulk-file-row ${stateCls[f.state]}`}>
+                <span className="bulk-file-name">{f.name}</span>
+                <span className="bulk-file-status">{stateLabel[f.state]}</span>
+                {f.error && <span className="bulk-file-error" title={f.error}>{f.error}</span>}
+                {f.state === FILE_STATES.queued && !running && (
+                  <button className="bulk-file-remove" onClick={() => removeFile(i)}>✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="bulk-upload-actions">
+          <button className="ag-btn ag-btn--ghost" onClick={onClose} disabled={running}>Cancel</button>
+          {allDone ? (
+            <button className="ag-btn ag-btn--primary" onClick={onClose}>Close</button>
+          ) : (
+            <button className="ag-btn ag-btn--primary" onClick={runUpload} disabled={!canStart}>
+              {running ? '⟳ Processing…' : `Upload ${files.filter(f => f.state === FILE_STATES.queued).length || files.length} File${files.length !== 1 ? 's' : ''}`}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main jobs module ─────────────────────────────────────────────────────────
 export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout, onBack }) {
   const [jobs,        setJobs]        = useState([]);
@@ -214,6 +378,7 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
   const [editJob,     setEditJob]     = useState(null);
   const [deleteId,    setDeleteId]    = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -296,6 +461,7 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
+          <button className="ag-btn ag-btn--ghost" onClick={() => setShowBulkUpload(true)}>📤 Bulk Upload</button>
           <button className="ag-btn ag-btn--primary" onClick={openCreate}>+ New Job</button>
         </div>
 
@@ -331,6 +497,7 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
                       <td className="ag-td-title">
                         <span className="ag-job-title">{job.title}</span>
                         {job.department && <span className="ag-job-dept">{job.department}</span>}
+                        {job.is_qualified && <span className="ag-qualified-badge">✓ Qualified</span>}
                       </td>
                       <td className="ag-td-muted">{job.client_name || '—'}</td>
                       <td className="ag-td-muted">{job.location    || '—'}</td>
@@ -370,6 +537,15 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
           </div>
         )}
       </div>
+
+      {/* Bulk upload modal */}
+      {showBulkUpload && (
+        <BulkUploadModal
+          authFetch={authFetch}
+          onDone={fetchJobs}
+          onClose={() => setShowBulkUpload(false)}
+        />
+      )}
 
       {/* Delete confirmation */}
       {deleteId && (

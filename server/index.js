@@ -53,6 +53,8 @@ app.use('/candidates',  require('./routes/candidates'));
 app.use('/enhance-jd',  require('./routes/enhance-jd'));
 app.use('/sessions',    require('./routes/sessions'));
 app.use('/pofu',        require('./routes/pofu'));
+app.use('/vi',          require('./routes/video-interviews'));
+app.use('/reports',     require('./routes/reports'));
 
 // ── Recording status webhook ────────────────────────────────────────────────
 app.post('/recording-status', async (req, res) => {

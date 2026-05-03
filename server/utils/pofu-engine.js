@@ -118,7 +118,7 @@ async function generateEmail(candidate, triggerReason) {
     ? new Date(candidate.doj).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
     : 'your joining date';
 
-  const prompt = `You are a friendly, professional recruiter at Zeople AI writing a post-offer follow-up email.
+  const prompt = `You are a friendly, professional recruiter at RecruiterOS writing a post-offer follow-up email.
 
 Candidate: ${candidate.candidate_name}
 Role: ${candidate.role_title || 'the position'}
@@ -133,7 +133,7 @@ Write a professional but warm email. Rules:
 - Sound human, not templated
 - Keep it concise (under 200 words)
 - Do NOT use placeholders like [Name] — use the actual candidate name
-- Sign off as "The Zeople AI Team"
+- Sign off as "The RecruiterOS Team"
 - Return ONLY valid JSON: { "subject": "...", "body": "..." }
 - body should be plain text with line breaks (\\n), no HTML`;
 
@@ -160,7 +160,7 @@ function bodyToHtml(text) {
   return `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#222;max-width:600px;margin:0 auto">
 ${text.split('\n').map(l => l.trim() ? `<p style="margin:0 0 12px">${l}</p>` : '').join('')}
 <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
-<p style="font-size:12px;color:#999">You're receiving this from Zeople AI as part of our candidate engagement programme. Reply to this email if you have any questions.</p>
+<p style="font-size:12px;color:#999">You're receiving this from RecruiterOS as part of our candidate engagement programme. Reply to this email if you have any questions.</p>
 </div>`;
 }
 

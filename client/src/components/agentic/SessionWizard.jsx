@@ -3,11 +3,12 @@ import Step1_SelectJD from './steps/Step1_SelectJD';
 import Step2_EnhanceJD from './steps/Step2_EnhanceJD';
 import Step3_SourceCandidates from './steps/Step3_SourceCandidates';
 import Step4_RecruiterScreening from './steps/Step4_RecruiterScreening';
-import Step5_AIInterviewReports from './steps/Step5_AIInterviewReports';
-import Step6_Decision from './steps/Step6_Decision';
-import Step7_PipelineTracker from './steps/Step7_PipelineTracker';
+import Step5_VideoInterviewScheduler from './steps/Step5_VideoInterviewScheduler';
+import Step6_AIInterviewReports from './steps/Step5_AIInterviewReports';
+import Step7_Decision from './steps/Step6_Decision';
+import Step8_PipelineTracker from './steps/Step7_PipelineTracker';
 import {
-  FormattedJDTab, RecruiterBriefTab, ClarificationsTab,
+  FormattedJDTab, RecruiterBriefTab, ClarificationsReadOnly,
   ReachoutTab, KeywordsTab, stripMarkers,
 } from './JDEnhancerTabs';
 
@@ -18,18 +19,20 @@ const STEPS = [
   { n: 2, label: 'Enhance JD',  short: 'Enhance'  },
   { n: 3, label: 'Source',      short: 'Source'   },
   { n: 4, label: 'Screening',   short: 'Screen'   },
-  { n: 5, label: 'AI Reports',  short: 'Reports'  },
-  { n: 6, label: 'Decision',    short: 'Decision' },
-  { n: 7, label: 'Tracker',     short: 'Tracker'  },
+  { n: 5, label: 'VI Schedule', short: 'Schedule' },
+  { n: 6, label: 'AI Reports',  short: 'Reports'  },
+  { n: 7, label: 'Decision',    short: 'Decision' },
+  { n: 8, label: 'Tracker',     short: 'Tracker'  },
 ];
 
 // ── Step gating ──────────────────────────────────────────────────────────────
 function isStepUnlocked(stepNum, session) {
   if (!session) return stepNum === 1;
   const { job_id, enhancement_saved, candidates = [] } = session;
-  const passing   = candidates.filter(c => c.screening_status === 'pass');
-  const scored    = passing.filter(c => c.ai_interview_score != null);
-  const proceeded = candidates.filter(c => c.decision === 'proceed');
+  const passing        = candidates.filter(c => c.screening_status === 'pass');
+  const activeForScore = passing.filter(c => !c.vi_review);
+  const scored         = activeForScore.filter(c => c.ai_interview_score != null);
+  const proceeded      = candidates.filter(c => c.decision === 'proceed');
 
   switch (stepNum) {
     case 1: return true;
@@ -37,8 +40,9 @@ function isStepUnlocked(stepNum, session) {
     case 3: return enhancement_saved === 1;
     case 4: return candidates.length > 0;
     case 5: return passing.length > 0;
-    case 6: return passing.length > 0 && scored.length === passing.length;
-    case 7: return proceeded.length > 0;
+    case 6: return passing.length > 0;
+    case 7: return passing.length > 0 && activeForScore.length > 0 && scored.length === activeForScore.length;
+    case 8: return proceeded.length > 0;
     default: return false;
   }
 }
@@ -167,14 +171,14 @@ export default function SessionWizard({ sessionId, authFetch, isLight, onToggleT
         <button className="sw-back-link" onClick={onBack}>← Sessions</button>
         <span className="sw-session-crumb-name">{session.name || `Session #${session.id}`}</span>
         {session.job?.title && <span className="sw-job-tag">{session.job.title}</span>}
-        {enhancement && (
-          <button
-            className="sw-jd-assets-btn"
-            onClick={() => { setShowJDModal(true); setJdModalTab('jd'); }}
-          >
-            View JD Assets
-          </button>
-        )}
+        <button
+          className="sw-jd-assets-btn"
+          style={!enhancement ? { opacity: 0.45, cursor: 'not-allowed' } : {}}
+          onClick={() => { if (enhancement) { setShowJDModal(true); setJdModalTab('jd'); } }}
+          title={!enhancement ? 'Complete Step 2 — Enhance JD — to view assets' : 'View JD Assets'}
+        >
+          View JD Assets
+        </button>
       </div>
 
       {/* Step indicator */}
@@ -206,9 +210,10 @@ export default function SessionWizard({ sessionId, authFetch, isLight, onToggleT
         {currentActive === 2 && <Step2_EnhanceJD {...stepProps} />}
         {currentActive === 3 && <Step3_SourceCandidates {...stepProps} />}
         {currentActive === 4 && <Step4_RecruiterScreening {...stepProps} />}
-        {currentActive === 5 && <Step5_AIInterviewReports {...stepProps} />}
-        {currentActive === 6 && <Step6_Decision {...stepProps} />}
-        {currentActive === 7 && <Step7_PipelineTracker {...stepProps} />}
+        {currentActive === 5 && <Step5_VideoInterviewScheduler {...stepProps} />}
+        {currentActive === 6 && <Step6_AIInterviewReports {...stepProps} />}
+        {currentActive === 7 && <Step7_Decision {...stepProps} />}
+        {currentActive === 8 && <Step8_PipelineTracker {...stepProps} />}
       </div>
 
       {/* JD Assets modal */}
@@ -238,11 +243,19 @@ export default function SessionWizard({ sessionId, authFetch, isLight, onToggleT
               </button>
             </div>
             <div className="jde-tab-content jde-assets-modal-content">
-              {jdModalTab === 'jd'        && <FormattedJDTab   content={enhancement.formattedJD}            />}
-              {jdModalTab === 'brief'     && <RecruiterBriefTab content={enhancement.recruiterBrief}         />}
-              {jdModalTab === 'questions' && <ClarificationsTab content={enhancement.clarificationQuestions} />}
-              {jdModalTab === 'reachout'  && <ReachoutTab       content={enhancement.reachoutMaterial}       />}
-              {jdModalTab === 'keywords'  && <KeywordsTab       content={enhancement.sourcingKeywords}       />}
+              {jdModalTab === 'jd'        && (enhancement.formattedJD
+                ? <FormattedJDTab content={enhancement.formattedJD} />
+                : <div className="rpt-empty">No formatted JD generated yet.</div>)}
+              {jdModalTab === 'brief'     && (enhancement.recruiterBrief
+                ? <RecruiterBriefTab content={enhancement.recruiterBrief} />
+                : <div className="rpt-empty">No recruiter brief generated yet.</div>)}
+              {jdModalTab === 'questions' && <ClarificationsReadOnly content={enhancement.clarificationQuestions} />}
+              {jdModalTab === 'reachout'  && (enhancement.reachoutMaterial
+                ? <ReachoutTab content={enhancement.reachoutMaterial} />
+                : <div className="rpt-empty">No reachout material generated yet.</div>)}
+              {jdModalTab === 'keywords'  && (enhancement.sourcingKeywords
+                ? <KeywordsTab content={enhancement.sourcingKeywords} />
+                : <div className="rpt-empty">No keywords generated yet.</div>)}
             </div>
           </div>
         </div>

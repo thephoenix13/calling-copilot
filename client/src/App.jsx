@@ -17,6 +17,9 @@ import PipelineSessions from './components/agentic/PipelineSessions';
 import SessionWizard from './components/agentic/SessionWizard';
 import POFUModule from './components/agentic/POFUModule';
 import WelcomeDashboard from './components/WelcomeDashboard';
+import VideoInterviewModule from './components/agentic/VideoInterviewModule';
+import ReportsModule from './components/agentic/ReportsModule';
+import CandidateFlow from './components/video/CandidateFlow';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -53,6 +56,11 @@ CTC: ₹7.5 LPA | Expected: ₹11–12 LPA | Notice: 30 days`,
 };
 
 export default function App() {
+  // ── Public candidate interview route ─────────────────────────────────────
+  if (window.location.pathname === '/interview') {
+    return <CandidateFlow />;
+  }
+
   // ── Auth ───────────────────────────────────────────────────────────────────
   const [userRole, setUserRole] = useState(() => {
     try {
@@ -113,6 +121,15 @@ export default function App() {
   // ── Auto-demo state ─────────────────────────────────────────────────────
   const [isAutoDemoRunning, setIsAutoDemoRunning] = useState(false);
   const autoDemoCancelRef = useRef(false);
+
+  // ── Call history / reports panel ─────────────────────────────────────────
+  const [showCallHistory, setShowCallHistory] = useState(false);
+  const [callHistoryList, setCallHistoryList] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // ── Consent gate ──────────────────────────────────────────────────────────
+  // null = not asked yet, true = consented, false = declined
+  const [consentGiven, setConsentGiven] = useState(null);
 
   // ── Socket.io ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -203,6 +220,7 @@ export default function App() {
   const resetCall = () => {
     setCallStatus('idle'); setTranscript([]); setPhoneNumber('+');
     setCallingNumber(''); setDeviceError(''); setIsMuted(false); setCurrentCallSid(null);
+    setConsentGiven(null);
   };
 
   // ── Word-group typewriter (simulates ASR capturing speech) ──────────────
@@ -378,6 +396,31 @@ export default function App() {
     setCallStatus('sim-ended');
   };
 
+  const openCallHistory = async () => {
+    setShowCallHistory(true);
+    setLoadingHistory(true);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/calls`);
+      const data = await res.json();
+      setCallHistoryList(data.calls || []);
+    } catch {
+      setCallHistoryList([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const loadHistoryReports = async (callSid) => {
+    try {
+      const res = await authFetch(`${BACKEND_URL}/calls/${callSid}/reports`);
+      const data = await res.json();
+      setReportData(data);
+      setShowCallHistory(false);
+    } catch (err) {
+      console.error('Failed to load reports:', err);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('authToken');
     setAuthToken(null);
@@ -394,6 +437,7 @@ export default function App() {
     setPhoneNumber('+');
     setCallingNumber('');
     setCurrentCallSid(null);
+    setConsentGiven(null);
   };
 
   const isSimActive = callStatus === 'sim-call';
@@ -442,7 +486,9 @@ export default function App() {
   if (view === 'jobs')        return <AppShell {...shellProps}><JobsModule       {...moduleProps} /></AppShell>;
   if (view === 'candidates')  return <AppShell {...shellProps}><CandidatesModule {...moduleProps} /></AppShell>;
   if (view === 'jd-enhancer') return <AppShell {...shellProps}><JDEnhancer       {...moduleProps} /></AppShell>;
-  if (view === 'pofu')        return <AppShell {...shellProps}><POFUModule        {...moduleProps} /></AppShell>;
+  if (view === 'pofu')             return <AppShell {...shellProps}><POFUModule           {...moduleProps} /></AppShell>;
+  if (view === 'video-interviews') return <AppShell {...shellProps}><VideoInterviewModule authFetch={authFetch} /></AppShell>;
+  if (view === 'reports')          return <AppShell {...shellProps}><ReportsModule authFetch={authFetch} /></AppShell>;
 
   if (view === 'sessions') {
     if (sessionId) {
@@ -532,6 +578,56 @@ export default function App() {
         <UsersPanel authToken={authToken} onClose={() => setShowUsers(false)} />
       )}
 
+      {/* ── Call Reports History Panel ── */}
+      {showCallHistory && (
+        <div className="report-overlay">
+          <div className="report-overlay-bar">
+            <span className="report-overlay-title">Call Reports</span>
+            <button className="report-close-btn" onClick={() => setShowCallHistory(false)}>✕ Close</button>
+          </div>
+          <div className="report-overlay-body">
+            {loadingHistory ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '3rem', justifyContent: 'center', color: 'var(--text-2)' }}>
+                <span className="spinner" /> Loading call history…
+              </div>
+            ) : callHistoryList.length === 0 ? (
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-2)' }}>
+                No calls recorded yet. Run the Auto Demo or make a call to generate reports.
+              </div>
+            ) : (
+              <div className="ch-list">
+                {callHistoryList.map(call => (
+                  <div key={call.id} className="ch-row">
+                    <div className="ch-info">
+                      <div className="ch-name">{call.candidate_name || call.candidate_phone || 'Unknown'}</div>
+                      <div className="ch-meta">
+                        {call.role_title && <span>{call.role_title}</span>}
+                        <span className={`ch-badge ch-badge--${call.status}`}>{call.status}</span>
+                        <span>{new Date(call.started_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                    </div>
+                    <div className="ch-actions">
+                      <button
+                        className="report-btn"
+                        onClick={async () => { await loadHistoryReports(call.call_sid); setShowReport(true); }}
+                      >
+                        📋 QA Report
+                      </button>
+                      <button
+                        className="report-btn"
+                        onClick={async () => { await loadHistoryReports(call.call_sid); setShowCER(true); }}
+                      >
+                        👤 Candidate Report
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Screening outcome panel ── */}
       {callStatus === 'ended' && screeningContext && (
         <div className="sw-outcome-overlay">
@@ -540,8 +636,9 @@ export default function App() {
               Call ended — record screening outcome for <strong>{screeningContext.candidateName}</strong>
             </div>
             <div className="sw-outcome-actions">
-              <button className="ag-btn ag-btn--primary" onClick={() => handleScreeningOutcome('pass')}>✓ Pass</button>
-              <button className="sw-outcome-fail-btn" onClick={() => handleScreeningOutcome('fail')}>✗ Fail</button>
+              <button className="ag-btn ag-btn--primary" onClick={() => handleScreeningOutcome('pass')}>✓ Shortlist</button>
+              <button className="sw-outcome-on-hold-btn" onClick={() => handleScreeningOutcome('on_hold')}>⏸ On Hold</button>
+              <button className="sw-outcome-reject-btn" onClick={() => handleScreeningOutcome('fail')}>✗ Reject</button>
               <button className="ag-btn ag-btn--ghost" onClick={() => handleScreeningOutcome(null)}>Skip</button>
             </div>
           </div>
@@ -560,12 +657,12 @@ export default function App() {
           )}
         </div>
         <div className="header-right">
-          {isAdmin && callStatus === 'idle' && (
+          {callStatus === 'idle' && (
             <button className="report-btn auto-demo-btn" onClick={runAutoDemo}>
               ▶ Auto Demo
             </button>
           )}
-          {isAdmin && isAutoDemoRunning && (
+          {isAutoDemoRunning && (
             <button
               className="report-btn"
               style={{ color: '#f87171', borderColor: 'rgba(248,113,113,0.4)' }}
@@ -577,8 +674,9 @@ export default function App() {
           {isSimEnded && (
             <button className="report-btn" onClick={resetDemo}>🔄 New Call</button>
           )}
-          {isAdmin && <button className="report-btn" onClick={() => setShowCER(true)}>👤 Candidate Report</button>}
-          {isAdmin && <button className="report-btn" onClick={() => setShowReport(true)}>📋 QA Report</button>}
+          <button className="report-btn" onClick={openCallHistory}>📂 Call Reports</button>
+          {reportData && <button className="report-btn" onClick={() => setShowCER(true)}>👤 Candidate Report</button>}
+          {reportData && <button className="report-btn" onClick={() => setShowReport(true)}>📋 QA Report</button>}
           {isAdmin && <button className="report-btn" onClick={() => setShowUsers(true)}>👥 Users</button>}
           <button className="theme-toggle-btn" onClick={() => setIsLight(l => !l)}>
             {isLight ? '🌙 Dark' : '☀️ Light'}
@@ -595,6 +693,21 @@ export default function App() {
       {generatingReports && (
         <div className="error-banner" style={{ background: 'rgba(251,191,36,0.1)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24' }}>
           <span className="spinner" style={{ marginRight: 8 }} /> Generating AI reports from conversation…
+        </div>
+      )}
+
+      {/* ── Consent gate banner ── */}
+      {(callStatus === 'in-call' || callStatus === 'sim-call') && consentGiven === null && (
+        <div className="consent-banner">
+          <span className="consent-banner-text">Has the candidate consented to this call being transcribed and analysed by AI?</span>
+          <div className="consent-banner-actions">
+            <button className="consent-btn consent-btn--yes" onClick={() => setConsentGiven(true)}>
+              Yes — Enable Transcript
+            </button>
+            <button className="consent-btn consent-btn--no" onClick={() => setConsentGiven(false)}>
+              No — Continue Without
+            </button>
+          </div>
         </div>
       )}
 
@@ -616,19 +729,20 @@ export default function App() {
           />
         </div>
 
-        {/* CENTER — Live Transcript */}
+        {/* CENTER — Interview Guide + AI Suggestions */}
         <div className="center-panel">
-          <Transcript entries={transcript} callStatus={callStatus} callingNumber={callingNumber} />
-        </div>
-
-        {/* RIGHT — Interview Guide + AI Suggestions */}
-        <div className="right-panel">
           <InterviewPanel
             transcript={transcript}
             callStatus={callStatus}
             initialJd={screeningContext?.jd}
             initialResume={screeningContext?.resume}
+            consentGiven={consentGiven}
           />
+        </div>
+
+        {/* RIGHT — Live Transcript */}
+        <div className="right-panel">
+          <Transcript entries={transcript} callStatus={callStatus} callingNumber={callingNumber} consentGiven={consentGiven} />
         </div>
       </main>
       </div>

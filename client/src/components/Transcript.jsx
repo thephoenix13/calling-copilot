@@ -1,15 +1,14 @@
 import { useEffect, useRef } from 'react';
 
-export default function Transcript({ entries, callStatus, callingNumber }) {
+export default function Transcript({ entries, callStatus, callingNumber, consentGiven }) {
   const bodyRef = useRef(null);
 
-  // Scroll to bottom every time entries change — direct DOM manipulation
-  // is more reliable than scrollIntoView when updates arrive rapidly
   useEffect(() => {
     const el = bodyRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [entries]);
 
+  const isActive = callStatus === 'in-call' || callStatus === 'sim-call';
   const isEmpty = entries.length === 0;
 
   return (
@@ -30,25 +29,36 @@ export default function Transcript({ entries, callStatus, callingNumber }) {
       </div>
 
       <div className="transcript-body" ref={bodyRef}>
-        {isEmpty && callStatus === 'idle' && (
+        {/* Consent-gated states */}
+        {isActive && consentGiven === null && (
+          <p className="transcript-placeholder">Waiting for consent confirmation…</p>
+        )}
+        {isActive && consentGiven === false && (
+          <p className="transcript-placeholder transcript-placeholder--disabled">
+            Transcript disabled — candidate did not consent.
+          </p>
+        )}
+
+        {/* Normal idle/connecting/ended placeholders */}
+        {(consentGiven !== false) && isEmpty && callStatus === 'idle' && (
           <p className="transcript-placeholder">
             Transcript will appear here once a call starts.
           </p>
         )}
-        {isEmpty && callStatus === 'connecting' && (
+        {(consentGiven !== false) && isEmpty && callStatus === 'connecting' && (
           <p className="transcript-placeholder">Waiting for call to connect…</p>
         )}
-        {isEmpty && callStatus === 'in-call' && (
+        {consentGiven === true && isEmpty && callStatus === 'in-call' && (
           <p className="transcript-placeholder">Listening… speak to see transcript</p>
         )}
-        {isEmpty && (callStatus === 'sim-call' || callStatus === 'sim-ended') && (
+        {consentGiven === true && isEmpty && (callStatus === 'sim-call' || callStatus === 'sim-ended') && (
           <p className="transcript-placeholder">Listening… speak to see transcript</p>
         )}
-        {isEmpty && callStatus === 'ended' && (
+        {(consentGiven !== false) && isEmpty && callStatus === 'ended' && (
           <p className="transcript-placeholder">No speech was detected in this call.</p>
         )}
 
-        {entries.map((entry, i) => (
+        {consentGiven === true && entries.map((entry, i) => (
           <div
             key={i}
             className={`transcript-entry ${entry.isFinal ? 'final' : 'interim'} speaker-${(entry.speaker || 'Candidate').toLowerCase()}`}
@@ -59,7 +69,7 @@ export default function Transcript({ entries, callStatus, callingNumber }) {
         ))}
       </div>
 
-      {!isEmpty && (
+      {consentGiven === true && !isEmpty && (
         <div className="transcript-footer">
           {entries.filter((e) => e.isFinal).length} utterance(s) captured
         </div>

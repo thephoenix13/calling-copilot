@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
-export default function InterviewPanel({ transcript, callStatus, initialJd, initialResume }) {
+export default function InterviewPanel({ transcript, callStatus, initialJd, initialResume, consentGiven }) {
   // ── JD / Resume inputs ───────────────────────────────────────────────────
   const [jdText, setJdText] = useState(initialJd || '');
   const [resumeText, setResumeText] = useState(initialResume || '');
@@ -24,6 +24,17 @@ export default function InterviewPanel({ transcript, callStatus, initialJd, init
 
   // ── Collapsed sections ───────────────────────────────────────────────────
   const [collapsed, setCollapsed] = useState(new Set());
+
+  // ── Auto-collapse inputs when suggestions arrive ─────────────────────────
+  const [inputsCollapsed, setInputsCollapsed] = useState(false);
+  const autoCollapsedRef = useRef(false);
+
+  useEffect(() => {
+    if (suggestions.length > 0 && !autoCollapsedRef.current) {
+      autoCollapsedRef.current = true;
+      setInputsCollapsed(true);
+    }
+  }, [suggestions]);
 
   // ── Generate questions ───────────────────────────────────────────────────
   const handleGenerate = async () => {
@@ -123,10 +134,19 @@ export default function InterviewPanel({ transcript, callStatus, initialJd, init
       {/* ── Header ── */}
       <div className="ip-header">
         <span className="ip-title">🧭 Interview Guide</span>
+        {inputsCollapsed ? (
+          <button className="ip-inputs-toggle" onClick={() => setInputsCollapsed(false)}>
+            ＋ JD / Resume
+          </button>
+        ) : (
+          <button className="ip-inputs-toggle ip-inputs-toggle--collapse" onClick={() => setInputsCollapsed(true)}>
+            − Hide
+          </button>
+        )}
       </div>
 
       {/* ── JD + Resume inputs ── */}
-      <div className="ip-inputs">
+      <div className={`ip-inputs${inputsCollapsed ? ' ip-inputs--hidden' : ''}`}>
         <div className="ip-input-group">
           <label className="ip-label">Job Description</label>
           <textarea
@@ -228,8 +248,8 @@ export default function InterviewPanel({ transcript, callStatus, initialJd, init
         </div>
       )}
 
-      {/* ── Live AI Suggestions ── */}
-      <div className="ip-suggestions">
+      {/* ── Live AI Suggestions — only shown when consent is given ── */}
+      <div className="ip-suggestions" style={consentGiven === false ? { opacity: 0.4, pointerEvents: 'none' } : {}}>
         <div className="ip-suggestions-header">
           <span className="ip-suggestions-title">💡 Live AI Suggestions</span>
           {suggestLoading && <span className="ip-suggest-loading">thinking…</span>}

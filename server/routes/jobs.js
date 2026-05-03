@@ -10,6 +10,7 @@ function parseJob(j) {
     ...j,
     required_skills:  JSON.parse(j.required_skills  || '[]'),
     preferred_skills: JSON.parse(j.preferred_skills || '[]'),
+    is_qualified:     j.is_qualified ? true : false,
   };
 }
 
@@ -116,6 +117,14 @@ router.put('/:id', (req, res) => {
 
   const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
   res.json(parseJob(job));
+});
+
+// PATCH /jobs/:id/qualify — mark job as qualified
+router.patch('/:id/qualify', (req, res) => {
+  const existing = db.prepare('SELECT id FROM jobs WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Job not found.' });
+  db.prepare(`UPDATE jobs SET is_qualified = 1, updated_at = datetime('now') WHERE id = ?`).run(req.params.id);
+  res.json({ ok: true });
 });
 
 // DELETE /jobs/:id

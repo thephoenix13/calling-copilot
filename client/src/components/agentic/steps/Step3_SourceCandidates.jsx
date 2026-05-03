@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -32,6 +32,52 @@ function MatchBadge({ pct }) {
   return <span className={`sw-match-badge ${cls}`}>{pct}%</span>;
 }
 
+function MatchReason({ skills, reqSkills, prefSkills, strengths, verdict }) {
+  const cs       = (skills || []).map(s => s.toLowerCase().trim());
+  const matched  = reqSkills.filter(s => cs.includes(s.toLowerCase().trim()));
+  const missing  = reqSkills.filter(s => !cs.includes(s.toLowerCase().trim()));
+  const matchPref = prefSkills.filter(s => cs.includes(s.toLowerCase().trim()));
+  return (
+    <div className="sw-match-reason">
+      {matched.length > 0 && (
+        <div className="sw-mr-row">
+          <span className="sw-mr-label sw-mr-label--match">Matched</span>
+          <div className="sw-mr-chips">
+            {matched.map(s => <span key={s} className="skill-chip skill-chip--match">{s}</span>)}
+          </div>
+        </div>
+      )}
+      {missing.length > 0 && (
+        <div className="sw-mr-row">
+          <span className="sw-mr-label sw-mr-label--miss">Missing</span>
+          <div className="sw-mr-chips">
+            {missing.map(s => <span key={s} className="skill-chip skill-chip--miss">{s}</span>)}
+          </div>
+        </div>
+      )}
+      {matchPref.length > 0 && (
+        <div className="sw-mr-row">
+          <span className="sw-mr-label sw-mr-label--pref">Preferred</span>
+          <div className="sw-mr-chips">
+            {matchPref.map(s => <span key={s} className="skill-chip skill-chip--pref">{s}</span>)}
+          </div>
+        </div>
+      )}
+      {verdict && (
+        <p className="sw-mr-verdict">{verdict}</p>
+      )}
+      {strengths?.length > 0 && (
+        <div className="sw-mr-row" style={{ alignItems: 'flex-start' }}>
+          <span className="sw-mr-label sw-mr-label--match">Strengths</span>
+          <ul className="sw-mr-strengths">
+            {strengths.map((s, i) => <li key={i}>{s}</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ScoreBadge({ score }) {
   if (score == null) return <span className="sw-eval-badge sw-eval-badge--pending">Evaluating…</span>;
   const cls = score.overall >= 70 ? 'sw-eval-badge--high' : score.overall >= 40 ? 'sw-eval-badge--mid' : 'sw-eval-badge--low';
@@ -41,6 +87,12 @@ function ScoreBadge({ score }) {
     </span>
   );
 }
+
+const EMPTY_PROFILE = {
+  name: '', email: '', phone: '', location: '', current_title: '', current_company: '',
+  experience_years: '', skills: '', education: '', linkedin_url: '',
+  resume_filename: '', resume_text: '',
+};
 
 export default function Step3_SourceCandidates({ session, authFetch, onComplete, onRefresh }) {
   const [candidates, setCandidates]   = useState([]);
@@ -52,6 +104,16 @@ export default function Step3_SourceCandidates({ session, authFetch, onComplete,
   const [aiChecks, setAiChecks]       = useState({});
   // Eval report modal
   const [reportSc, setReportSc]       = useState(null); // session_candidate row
+  // Match reason expand
+  const [reasonId, setReasonId]       = useState(null);
+  const toggleReason = (id) => setReasonId(prev => prev === id ? null : id);
+  // Add new profile modal
+  const [showAddModal, setShowAddModal]   = useState(false);
+  const [newProfile, setNewProfile]       = useState(EMPTY_PROFILE);
+  const [addingProfile, setAddingProfile] = useState(false);
+  const [addProfileErr, setAddProfileErr] = useState('');
+  const [parsing, setParsing]             = useState(false);
+  const fileInputRef                      = useRef(null);
 
   const runAiCheck = useCallback(async (candidate) => {
     const text = candidate.resume_text;
@@ -128,6 +190,98 @@ export default function Step3_SourceCandidates({ session, authFetch, onComplete,
     }
   };
 
+  const handleResumeUpload = async (file) => {
+    if (!file) return;
+    setParsing(true);
+    setAddProfileErr('');
+    try {
+      const formData = new FormData();
+      formData.append('resume', file);
+      const res  = await authFetch(`${BACKEND_URL}/candidates/parse-resume`, { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Parse failed');
+      const f = data.fields || {};
+      setNewProfile(p => ({
+        ...p,
+        name:             f.name             || p.name,
+        email:            f.email            || p.email,
+        phone:            f.phone            || p.phone,
+        location:         f.location         || p.location,
+        current_title:    f.current_title    || p.current_title,
+        current_company:  f.current_company  || p.current_company,
+        experience_years: f.experience_years != null ? String(f.experience_years) : p.experience_years,
+        skills:           Array.isArray(f.skills) && f.skills.length ? f.skills.join(', ') : p.skills,
+        education:        f.education        || p.education,
+        linkedin_url:     f.linkedin_url     || p.linkedin_url,
+        resume_filename:  data.resumeFilename || '',
+        resume_text:      data.resumeText     || '',
+      }));
+    } catch (err) {
+      setAddProfileErr(err.message);
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const handleAddNewProfile = async () => {
+    if (!newProfile.name.trim()) { setAddProfileErr('Name is required.'); return; }
+    setAddingProfile(true);
+    setAddProfileErr('');
+    try {
+      const skillsArr = newProfile.skills
+        ? newProfile.skills.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+
+      // 1. Create candidate in DB
+      const cRes  = await authFetch(`${BACKEND_URL}/candidates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:             newProfile.name.trim(),
+          email:            newProfile.email.trim()           || null,
+          phone:            newProfile.phone.trim()           || null,
+          location:         newProfile.location.trim()        || null,
+          current_title:    newProfile.current_title.trim()   || null,
+          current_company:  newProfile.current_company.trim() || null,
+          experience_years: newProfile.experience_years ? Number(newProfile.experience_years) : null,
+          skills:           skillsArr,
+          education:        newProfile.education.trim()       || null,
+          linkedin_url:     newProfile.linkedin_url.trim()    || null,
+          resume_filename:  newProfile.resume_filename        || null,
+          resume_text:      newProfile.resume_text            || null,
+        }),
+      });
+      if (!cRes.ok) { const e = await cRes.json(); throw new Error(e.error || 'Failed to create candidate'); }
+      const candidate = await cRes.json();
+
+      // 2. Add to session
+      const sRes  = await authFetch(`${BACKEND_URL}/sessions/${session.id}/candidates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidate_ids: [candidate.id] }),
+      });
+      const sData = await sRes.json();
+      setShowAddModal(false);
+      setNewProfile(EMPTY_PROFILE);
+      await onRefresh();
+
+      // 3. Evaluate in background
+      if (sData.added?.length) {
+        sData.added.forEach(sc => {
+          setEvaluating(e => ({ ...e, [sc.id]: true }));
+          authFetch(`${BACKEND_URL}/sessions/${session.id}/candidates/${sc.id}/evaluate`, { method: 'POST' })
+            .then(() => onRefresh())
+            .catch(console.error)
+            .finally(() => setEvaluating(e => ({ ...e, [sc.id]: false })));
+        });
+      }
+    } catch (err) {
+      setAddProfileErr(err.message);
+    } finally {
+      setAddingProfile(false);
+    }
+  };
+
   const handleContinue = async () => {
     await onComplete({}, 4);
   };
@@ -152,29 +306,44 @@ export default function Step3_SourceCandidates({ session, authFetch, onComplete,
           <div className="sw-section-title">Added to Session ({addedCandidates.length})</div>
           <div className="sw-added-list">
             {addedCandidates.map(sc => (
-              <div key={sc.id} className="sw-added-row">
-                <div className="sw-added-info">
-                  <span className="sw-added-name">{sc.candidate_name}</span>
-                  {sc.candidate_title && <span className="sw-added-title"> · {sc.candidate_title}</span>}
+              <div key={sc.id}>
+                <div className="sw-added-row">
+                  <div className="sw-added-info">
+                    <span className="sw-added-name">{sc.candidate_name}</span>
+                    {sc.candidate_title && <span className="sw-added-title"> · {sc.candidate_title}</span>}
+                  </div>
+                  <div className="sw-added-badges">
+                    <MatchBadge pct={Math.round(sc.match_percentage || 0)} />
+                    <button
+                      className={`sw-why-btn${reasonId === `added-${sc.id}` ? ' sw-why-btn--active' : ''}`}
+                      onClick={() => toggleReason(`added-${sc.id}`)}
+                    >Why?</button>
+                    {evaluating[sc.id] ? (
+                      <span className="sw-eval-badge sw-eval-badge--pending">Evaluating…</span>
+                    ) : sc.resume_score ? (
+                      <>
+                        <ScoreBadge score={sc.resume_score} />
+                        <button
+                          className="aic-check-btn"
+                          style={{ marginLeft: 4 }}
+                          onClick={() => setReportSc(sc)}
+                        >View Report</button>
+                      </>
+                    ) : (
+                      <span className="sw-eval-badge sw-eval-badge--pending">No eval</span>
+                    )}
+                  </div>
+                  <button className="ag-action-btn ag-action-btn--danger" onClick={() => handleRemove(sc.id)}>✕</button>
                 </div>
-                <div className="sw-added-badges">
-                  <MatchBadge pct={Math.round(sc.match_percentage || 0)} />
-                  {evaluating[sc.id] ? (
-                    <span className="sw-eval-badge sw-eval-badge--pending">Evaluating…</span>
-                  ) : sc.resume_score ? (
-                    <>
-                      <ScoreBadge score={sc.resume_score} />
-                      <button
-                        className="aic-check-btn"
-                        style={{ marginLeft: 4 }}
-                        onClick={() => setReportSc(sc)}
-                      >View Report</button>
-                    </>
-                  ) : (
-                    <span className="sw-eval-badge sw-eval-badge--pending">No eval</span>
-                  )}
-                </div>
-                <button className="ag-action-btn ag-action-btn--danger" onClick={() => handleRemove(sc.id)}>✕</button>
+                {reasonId === `added-${sc.id}` && (
+                  <MatchReason
+                    skills={sc.skills || []}
+                    reqSkills={reqSkills}
+                    prefSkills={prefSkills}
+                    strengths={sc.resume_score?.strengths}
+                    verdict={sc.resume_score?.verdict}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -193,6 +362,7 @@ export default function Step3_SourceCandidates({ session, authFetch, onComplete,
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="ag-btn ag-btn--ghost ag-btn--sm" onClick={selectAll}>Select All</button>
             <button className="ag-btn ag-btn--ghost ag-btn--sm" onClick={clearAll}>Clear</button>
+            <button className="ag-btn ag-btn--ghost ag-btn--sm" onClick={() => { setShowAddModal(true); setAddProfileErr(''); }}>+ New Profile</button>
             <button
               className="ag-btn ag-btn--primary ag-btn--sm"
               onClick={handleAdd}
@@ -226,35 +396,56 @@ export default function Step3_SourceCandidates({ session, authFetch, onComplete,
                   const unmatched = reqSkills.filter(s => !matched.includes(s));
                   const aic       = aiChecks[c.id];
                   const hasResume = c.resume_text?.trim().length >= 100;
+                  const isReasonOpen = reasonId === `avail-${c.id}`;
                   return (
-                    <tr key={c.id} className={selected[c.id] ? 'sw-row--selected' : ''} onClick={() => toggleSelect(c.id)} style={{ cursor: 'pointer' }}>
-                      <td onClick={e => e.stopPropagation()}>
-                        <input type="checkbox" checked={!!selected[c.id]} onChange={() => toggleSelect(c.id)} />
-                      </td>
-                      <td><span className="sw-cand-name">{c.name}</span></td>
-                      <td><span className="sw-cand-title">{c.current_title || '—'}</span></td>
-                      <td><MatchBadge pct={c._match} /></td>
-                      <td>
-                        <div className="sw-skill-row">
-                          {matched.slice(0, 4).map(s   => <span key={s} className="skill-chip skill-chip--match">{s}</span>)}
-                          {unmatched.slice(0, 3).map(s => <span key={s} className="skill-chip skill-chip--miss">{s}</span>)}
-                          {(matched.length + unmatched.length) > 7 && <span className="sw-more">+{(matched.length + unmatched.length) - 7}</span>}
-                        </div>
-                      </td>
-                      <td onClick={e => e.stopPropagation()}>
-                        {!hasResume ? (
-                          <span className="aic-no-resume">No resume</span>
-                        ) : aic?.checking ? (
-                          <span className="aic-checking"><span className="spinner" style={{ width: 12, height: 12 }} /> Checking…</span>
-                        ) : aic?.result ? (
-                          <AicBadge result={aic.result} />
-                        ) : (
-                          <button className="aic-check-btn" onClick={() => runAiCheck(c)}>
-                            Check AI
-                          </button>
-                        )}
-                      </td>
-                    </tr>
+                    <>
+                      <tr key={c.id} className={selected[c.id] ? 'sw-row--selected' : ''} onClick={() => toggleSelect(c.id)} style={{ cursor: 'pointer' }}>
+                        <td onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" checked={!!selected[c.id]} onChange={() => toggleSelect(c.id)} />
+                        </td>
+                        <td><span className="sw-cand-name">{c.name}</span></td>
+                        <td><span className="sw-cand-title">{c.current_title || '—'}</span></td>
+                        <td onClick={e => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
+                          <MatchBadge pct={c._match} />
+                          <button
+                            className={`sw-why-btn${isReasonOpen ? ' sw-why-btn--active' : ''}`}
+                            style={{ marginLeft: 6 }}
+                            onClick={() => toggleReason(`avail-${c.id}`)}
+                          >Why?</button>
+                        </td>
+                        <td>
+                          <div className="sw-skill-row">
+                            {matched.slice(0, 4).map(s   => <span key={s} className="skill-chip skill-chip--match">{s}</span>)}
+                            {unmatched.slice(0, 3).map(s => <span key={s} className="skill-chip skill-chip--miss">{s}</span>)}
+                            {(matched.length + unmatched.length) > 7 && <span className="sw-more">+{(matched.length + unmatched.length) - 7}</span>}
+                          </div>
+                        </td>
+                        <td onClick={e => e.stopPropagation()}>
+                          {!hasResume ? (
+                            <span className="aic-no-resume">No resume</span>
+                          ) : aic?.checking ? (
+                            <span className="aic-checking"><span className="spinner" style={{ width: 12, height: 12 }} /> Checking…</span>
+                          ) : aic?.result ? (
+                            <AicBadge result={aic.result} />
+                          ) : (
+                            <button className="aic-check-btn" onClick={() => runAiCheck(c)}>
+                              Check AI
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {isReasonOpen && (
+                        <tr key={`reason-${c.id}`} className="sw-reason-row">
+                          <td colSpan={6} style={{ padding: 0 }}>
+                            <MatchReason
+                              skills={c.skills}
+                              reqSkills={reqSkills}
+                              prefSkills={prefSkills}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   );
                 })}
               </tbody>
@@ -262,6 +453,96 @@ export default function Step3_SourceCandidates({ session, authFetch, onComplete,
           </div>
         )}
       </div>
+
+      {/* Add new profile modal */}
+      {showAddModal && (
+        <div className="ag-modal-overlay" onClick={() => setShowAddModal(false)}>
+          <div className="ag-modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div className="ag-modal-header">
+              <h3 className="ag-modal-title">Add New Profile</h3>
+              <button className="jde-assets-modal-close" onClick={() => setShowAddModal(false)}>✕</button>
+            </div>
+            <div className="ag-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Resume upload */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.txt"
+                style={{ display: 'none' }}
+                onChange={e => { if (e.target.files[0]) handleResumeUpload(e.target.files[0]); e.target.value = ''; }}
+              />
+              <div
+                className={`sw-resume-dropzone${parsing ? ' sw-resume-dropzone--loading' : newProfile.resume_filename ? ' sw-resume-dropzone--done' : ''}`}
+                onClick={() => !parsing && fileInputRef.current.click()}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); if (!parsing && e.dataTransfer.files[0]) handleResumeUpload(e.dataTransfer.files[0]); }}
+              >
+                {parsing ? (
+                  <><span className="spinner" style={{ width: 14, height: 14 }} /> Parsing resume…</>
+                ) : newProfile.resume_filename ? (
+                  <><span style={{ color: 'var(--emerald)' }}>✓</span> {newProfile.resume_filename} — <span style={{ color: 'var(--purple)' }}>replace</span></>
+                ) : (
+                  <>Upload Resume <span className="sw-field-hint">PDF, DOCX or TXT — fields auto-fill</span></>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div className="sw-field-group">
+                  <label className="sw-field-label">Name <span style={{ color: '#f87171' }}>*</span></label>
+                  <input className="ag-input" placeholder="Full name" value={newProfile.name}
+                    onChange={e => setNewProfile(p => ({ ...p, name: e.target.value }))} />
+                </div>
+                <div className="sw-field-group">
+                  <label className="sw-field-label">Email</label>
+                  <input className="ag-input" placeholder="email@example.com" value={newProfile.email}
+                    onChange={e => setNewProfile(p => ({ ...p, email: e.target.value }))} />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div className="sw-field-group">
+                  <label className="sw-field-label">Current Title</label>
+                  <input className="ag-input" placeholder="e.g. Senior Engineer" value={newProfile.current_title}
+                    onChange={e => setNewProfile(p => ({ ...p, current_title: e.target.value }))} />
+                </div>
+                <div className="sw-field-group">
+                  <label className="sw-field-label">Current Company</label>
+                  <input className="ag-input" placeholder="e.g. Acme Corp" value={newProfile.current_company}
+                    onChange={e => setNewProfile(p => ({ ...p, current_company: e.target.value }))} />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div className="sw-field-group">
+                  <label className="sw-field-label">Experience (years)</label>
+                  <input className="ag-input" type="number" min="0" placeholder="e.g. 5" value={newProfile.experience_years}
+                    onChange={e => setNewProfile(p => ({ ...p, experience_years: e.target.value }))} />
+                </div>
+                <div className="sw-field-group">
+                  <label className="sw-field-label">Location</label>
+                  <input className="ag-input" placeholder="e.g. Bangalore" value={newProfile.location}
+                    onChange={e => setNewProfile(p => ({ ...p, location: e.target.value }))} />
+                </div>
+              </div>
+              <div className="sw-field-group">
+                <label className="sw-field-label">Skills <span className="sw-field-hint">(comma-separated)</span></label>
+                <input className="ag-input" placeholder="e.g. React, Node.js, SQL" value={newProfile.skills}
+                  onChange={e => setNewProfile(p => ({ ...p, skills: e.target.value }))} />
+              </div>
+              <div className="sw-field-group">
+                <label className="sw-field-label">LinkedIn URL</label>
+                <input className="ag-input" placeholder="https://linkedin.com/in/..." value={newProfile.linkedin_url}
+                  onChange={e => setNewProfile(p => ({ ...p, linkedin_url: e.target.value }))} />
+              </div>
+              {addProfileErr && <div className="ag-error">{addProfileErr}</div>}
+            </div>
+            <div className="ag-modal-footer">
+              <button className="ag-btn ag-btn--ghost" onClick={() => setShowAddModal(false)}>Cancel</button>
+              <button className="ag-btn ag-btn--primary" onClick={handleAddNewProfile} disabled={addingProfile}>
+                {addingProfile ? 'Adding…' : 'Add to Session'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Eval report modal */}
       {reportSc && reportSc.resume_score && (

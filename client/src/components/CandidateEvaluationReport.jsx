@@ -584,7 +584,7 @@ export default function CandidateEvaluationReport({ reportData: propData }) {
           display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
           <span style={{ fontSize: 11, color: C.textFaint }}>
-            Prepared by {meta.recruiter} · Zeople AI · {meta.date} · {meta.time}
+            Prepared by {meta.recruiter} · RecruiterOS · {meta.date} · {meta.time}
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             {["Submit to Client", "Request Second Opinion", "Archive"].map((label) => (
