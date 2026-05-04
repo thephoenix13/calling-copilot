@@ -3,26 +3,27 @@ import { useState, useEffect, useCallback } from 'react';
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
 const STATE_OPTIONS = [
-  { value: 'offer_accepted', label: 'Offer Accepted' },
-  { value: 'resigned',       label: 'Resigned'       },
-  { value: 'bgv',            label: 'BGV'            },
-  { value: 'confirmed',      label: 'Confirmed'      },
-  { value: 'joined',         label: 'Joined'         },
-  { value: 'dropped',        label: 'Dropped'        },
+  { value: 'offer_accepted', label: 'Offer Accepted'   },
+  { value: 'resigned',       label: 'Notice Period'    },
+  { value: 'bgv',            label: 'BGV In Progress'  },
+  { value: 'confirmed',      label: 'Joining Confirmed'},
+  { value: 'joined',         label: 'Joined'           },
+  { value: 'dropped',        label: 'Offer Dropped'    },
 ];
 
 const TRIGGER_LABELS = {
-  day0_welcome:        'Day 0 Welcome',
-  resignation_check:   'Resignation Check',
-  bgv_nudge:           'BGV Nudge',
-  t14_checklist:       'T-14 Checklist',
-  t7_warmup:           'T-7 Warm-up',
-  t1_excitement:       'T-1 Excitement',
-  risk_amber_checkin:  'Amber Check-in',
-  risk_red_escalation: 'Red Escalation',
-  no_response_nudge:   'No-Response Nudge',
-  manual:              'Manual',
+  day0_welcome:        'Welcome Email',
+  resignation_check:   'Notice Period Follow-up',
+  bgv_nudge:           'BGV Document Reminder',
+  t14_checklist:       'Pre-Joining Checklist',
+  t7_warmup:           'One Week to Joining',
+  t1_excitement:       'Joining Tomorrow',
+  risk_amber_checkin:  'Engagement Check-in',
+  risk_red_escalation: 'At-Risk Follow-up',
+  no_response_nudge:   'Gentle Nudge',
+  manual:              'Manual Email',
   reply:               'Reply (Inbound)',
+  candidate_reply:     'Candidate Response',
 };
 
 const RISK_COLORS = { low: '#10b981', medium: '#f59e0b', high: '#ef4444' };
@@ -291,6 +292,12 @@ export default function POFUCandidate({ candidateId, authFetch, isLight, onToggl
                     <span className="pofu-email-date">
                       {new Date(em.sent_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </span>
+                    {em.direction === 'outbound' && em.response_options && !em.candidate_response && (
+                      <span className="pofu-awaiting-badge">Awaiting response</span>
+                    )}
+                    {em.candidate_response && (
+                      <span className="pofu-responded-badge">✓ Responded</span>
+                    )}
                     {em.direction === 'outbound' && (
                       <button
                         className="pofu-log-reply-btn"
@@ -299,8 +306,17 @@ export default function POFUCandidate({ candidateId, authFetch, isLight, onToggl
                     )}
                   </div>
                   {em.subject && <div className="pofu-email-subject">{em.subject}</div>}
-                  {em.body && (
-                    <pre className="pofu-email-body">{em.body}</pre>
+                  {em.body && <pre className="pofu-email-body">{em.body}</pre>}
+                  {em.candidate_response && (
+                    <div className="pofu-candidate-response">
+                      <span className="pofu-candidate-response-label">Candidate replied:</span>
+                      <span className="pofu-candidate-response-text">{em.candidate_response}</span>
+                      {em.responded_at && (
+                        <span className="pofu-candidate-response-date">
+                          {new Date(em.responded_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               ))}

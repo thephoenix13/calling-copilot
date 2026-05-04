@@ -638,7 +638,7 @@ function JobsTab({ authFetch }) {
 
 // ── Main module ───────────────────────────────────────────────────────────────
 
-export default function ReportsModule({ authFetch }) {
+export default function ReportsModule({ authFetch, onBack }) {
   const [tab,     setTab]     = useState('funnel');
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
@@ -673,9 +673,12 @@ export default function ReportsModule({ authFetch }) {
   return (
     <div className="page-content">
       <div className="rpt-header">
-        <div>
-          <h1 className="rpt-title">Reports & Analytics</h1>
-          <p className="rpt-subtitle">Aggregated data across all your hiring activity</p>
+        <div className="rpt-header-left">
+          {onBack && <button className="ag-btn ag-btn--ghost ag-btn--sm" onClick={onBack}>← Back</button>}
+          <div>
+            <h1 className="rpt-title">Reports & Analytics</h1>
+            <p className="rpt-subtitle">Aggregated data across all your hiring activity</p>
+          </div>
         </div>
         <button className="ag-btn ag-btn--ghost ag-btn--sm" onClick={load}>↺ Refresh</button>
       </div>

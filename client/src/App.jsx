@@ -20,6 +20,7 @@ import WelcomeDashboard from './components/WelcomeDashboard';
 import VideoInterviewModule from './components/agentic/VideoInterviewModule';
 import ReportsModule from './components/agentic/ReportsModule';
 import CandidateFlow from './components/video/CandidateFlow';
+import CandidateResponsePage from './components/CandidateResponsePage';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -56,10 +57,9 @@ CTC: ₹7.5 LPA | Expected: ₹11–12 LPA | Notice: 30 days`,
 };
 
 export default function App() {
-  // ── Public candidate interview route ─────────────────────────────────────
-  if (window.location.pathname === '/interview') {
-    return <CandidateFlow />;
-  }
+  // ── Public candidate routes ───────────────────────────────────────────────
+  if (window.location.pathname === '/interview') return <CandidateFlow />;
+  if (window.location.pathname === '/respond')   return <CandidateResponsePage />;
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   const [userRole, setUserRole] = useState(() => {
@@ -482,7 +482,7 @@ export default function App() {
     navigate('calling-copilot');
   };
 
-  if (view === 'dashboard')   return <AppShell {...shellProps}><WelcomeDashboard displayName={displayName} onNavigate={navigate} /></AppShell>;
+  if (view === 'dashboard')   return <AppShell {...shellProps}><WelcomeDashboard displayName={displayName} onNavigate={navigate} authFetch={authFetch} /></AppShell>;
   if (view === 'jobs')        return <AppShell {...shellProps}><JobsModule       {...moduleProps} /></AppShell>;
   if (view === 'candidates')  return <AppShell {...shellProps}><CandidatesModule {...moduleProps} /></AppShell>;
   if (view === 'jd-enhancer') return <AppShell {...shellProps}><JDEnhancer       {...moduleProps} /></AppShell>;

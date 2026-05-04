@@ -1,8 +1,26 @@
 const Anthropic = require('@anthropic-ai/sdk');
+const crypto    = require('crypto');
 const { db }    = require('../db');
 const { sendEmail } = require('./mailer');
 
 const anthropic = new Anthropic();
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+const DEFAULT_RESPONSE_OPTIONS = ['Got it, thank you!', 'I have a question'];
+
+const RESPONSE_OPTIONS = {
+  day0_welcome:        ['Got it, thank you!', 'I have a question'],
+  resignation_check:   ["Yes, I've submitted my resignation", 'Not yet — will do soon', 'I need to discuss this'],
+  bgv_nudge:           ['Documents submitted', 'Need help with BGV process', 'I have a question'],
+  t14_checklist:       ["All noted, I'm ready!", 'I have a question'],
+  t7_warmup:           ['Excited to join!', 'I have a question'],
+  t1_excitement:       ['See you tomorrow!', 'I need to discuss something urgent'],
+  risk_amber_checkin:  ['All good, joining as planned', 'I have some concerns'],
+  risk_red_escalation: ['All good, joining as planned', "I'd like to speak with someone"],
+  no_response_nudge:   ['Still joining as planned', 'I need to discuss something'],
+  manual:              ['Got it, thank you!', 'I have a question'],
+};
 
 // ── Risk scoring ─────────────────────────────────────────────────────────────
 
@@ -134,6 +152,7 @@ Write a professional but warm email. Rules:
 - Keep it concise (under 200 words)
 - Do NOT use placeholders like [Name] — use the actual candidate name
 - Sign off as "The RecruiterOS Team"
+- NEVER use the words "passed", "failed", "cleared", "did not make it", or "selected after interview" — the candidate has already accepted an offer; refer to them as "joining us", "your offer", "your start date", or "the team"
 - Return ONLY valid JSON: { "subject": "...", "body": "..." }
 - body should be plain text with line breaks (\\n), no HTML`;
 
@@ -156,9 +175,18 @@ Write a professional but warm email. Rules:
   }
 }
 
-function bodyToHtml(text) {
+function bodyToHtml(text, interaction = null) {
+  const ctaHtml = (interaction?.token && interaction?.options?.length) ? `
+<div style="margin:28px 0;padding:20px;background:#f9f9f9;border-radius:8px;text-align:center">
+  <p style="margin:0 0 14px;font-size:14px;color:#555;font-weight:600">Please acknowledge this email by clicking one of the options below — your response helps us support your onboarding smoothly.</p>
+  <div>
+    ${interaction.options.map((opt, i) => `<a href="${FRONTEND_URL}/respond?t=${interaction.token}&r=${i}" style="display:inline-block;margin:4px 6px;padding:10px 18px;background:#1a1a2e;color:#fff;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none">${opt}</a>`).join('')}
+  </div>
+</div>` : '';
+
   return `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#222;max-width:600px;margin:0 auto">
 ${text.split('\n').map(l => l.trim() ? `<p style="margin:0 0 12px">${l}</p>` : '').join('')}
+${ctaHtml}
 <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
 <p style="font-size:12px;color:#999">You're receiving this from RecruiterOS as part of our candidate engagement programme. Reply to this email if you have any questions.</p>
 </div>`;
@@ -182,15 +210,17 @@ async function processCandidate(candidate) {
   if (!trigger) return { sent: false, reason: 'no trigger' };
 
   const { subject, body } = await generateEmail(candidate, trigger);
-  const html = bodyToHtml(body);
+  const options = RESPONSE_OPTIONS[trigger] || DEFAULT_RESPONSE_OPTIONS;
+  const token   = crypto.randomBytes(16).toString('hex');
+  const html    = bodyToHtml(body, options ? { token, options } : null);
 
   await sendEmail({ to: candidate.candidate_email, subject, html, text: body });
 
   const now = new Date().toISOString();
   db.prepare(`
-    INSERT INTO pofu_emails (pofu_candidate_id, direction, trigger_reason, subject, body, ai_generated, sent_at)
-    VALUES (?, 'outbound', ?, ?, ?, 1, ?)
-  `).run(candidate.id, trigger, subject, body, now);
+    INSERT INTO pofu_emails (pofu_candidate_id, direction, trigger_reason, subject, body, ai_generated, sent_at, response_token, response_options)
+    VALUES (?, 'outbound', ?, ?, ?, 1, ?, ?, ?)
+  `).run(candidate.id, trigger, subject, body, now, token, options ? JSON.stringify(options) : null);
 
   db.prepare('UPDATE pofu_candidates SET last_email_at=?, updated_at=datetime("now") WHERE id=?')
     .run(now, candidate.id);
@@ -217,4 +247,4 @@ async function runSchedulerCycle() {
   }
 }
 
-module.exports = { calcRisk, generateEmail, processCandidate, runSchedulerCycle, bodyToHtml };
+module.exports = { calcRisk, generateEmail, processCandidate, runSchedulerCycle, bodyToHtml, RESPONSE_OPTIONS, DEFAULT_RESPONSE_OPTIONS };

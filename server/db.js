@@ -304,6 +304,76 @@ try { db.exec('ALTER TABLE session_candidates ADD COLUMN vi_invite_sent INTEGER 
 try { db.exec('ALTER TABLE session_candidates ADD COLUMN vi_invite_sent_at TEXT'); } catch (_) {}
 try { db.exec("ALTER TABLE session_candidates ADD COLUMN vi_review TEXT"); } catch (_) {}
 
+// Migration: fix screening_status CHECK to include 'on_hold', add assessment_type column
+try {
+  const scMaster = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='session_candidates'"
+  ).get();
+  if (scMaster && !scMaster.sql.includes("'on_hold'")) {
+    const cols = db.prepare('PRAGMA table_info(session_candidates)').all().map(c => c.name);
+    const viSentSrc  = cols.includes('vi_invite_sent')   ? 'COALESCE(vi_invite_sent,0)' : '0';
+    const viAtSrc    = cols.includes('vi_invite_sent_at') ? 'vi_invite_sent_at'           : 'NULL';
+    const viRevSrc   = cols.includes('vi_review')         ? 'vi_review'                   : 'NULL';
+    db.pragma('foreign_keys = OFF');
+    db.exec(`
+      CREATE TABLE session_candidates_v2 (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id              INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        candidate_id            INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+        match_percentage        REAL,
+        resume_score            TEXT,
+        screening_status        TEXT NOT NULL DEFAULT 'pending'
+                                CHECK(screening_status IN ('pending','pass','fail','on_hold')),
+        screening_report_url    TEXT,
+        ai_interview_score      INTEGER,
+        ai_interview_report_url TEXT,
+        decision                TEXT CHECK(decision IN ('proceed','pool')),
+        interview_level         TEXT CHECK(interview_level IN ('L1','L2','L3')),
+        email_sent              INTEGER NOT NULL DEFAULT 0,
+        pipeline_status         TEXT NOT NULL DEFAULT 'pending'
+                                CHECK(pipeline_status IN ('pending','hold','reject','selected')),
+        pipeline_feedback       TEXT,
+        added_at                TEXT NOT NULL DEFAULT (datetime('now')),
+        vi_invite_sent          INTEGER NOT NULL DEFAULT 0,
+        vi_invite_sent_at       TEXT,
+        vi_review               TEXT,
+        assessment_type         TEXT,
+        UNIQUE(session_id, candidate_id)
+      );
+      INSERT INTO session_candidates_v2
+        (id,session_id,candidate_id,match_percentage,resume_score,screening_status,
+         screening_report_url,ai_interview_score,ai_interview_report_url,
+         decision,interview_level,email_sent,pipeline_status,pipeline_feedback,added_at,
+         vi_invite_sent,vi_invite_sent_at,vi_review)
+        SELECT id,session_id,candidate_id,match_percentage,resume_score,screening_status,
+               screening_report_url,ai_interview_score,ai_interview_report_url,
+               decision,interview_level,email_sent,pipeline_status,pipeline_feedback,added_at,
+               ${viSentSrc},${viAtSrc},${viRevSrc}
+        FROM session_candidates;
+      DROP TABLE session_candidates;
+      ALTER TABLE session_candidates_v2 RENAME TO session_candidates;
+      CREATE INDEX IF NOT EXISTS idx_session_candidates_session_id ON session_candidates(session_id);
+    `);
+    db.pragma('foreign_keys = ON');
+    console.log('[migration] session_candidates: added on_hold + assessment_type');
+  } else if (scMaster && !scMaster.sql.includes('assessment_type')) {
+    try { db.exec('ALTER TABLE session_candidates ADD COLUMN assessment_type TEXT'); } catch (_) {}
+  }
+} catch (e) {
+  console.error('[migration] session_candidates:', e.message);
+  try { db.pragma('foreign_keys = ON'); } catch (_) {}
+}
+
+// Add qualification_qa column to jobs
+try { db.exec('ALTER TABLE jobs ADD COLUMN qualification_qa TEXT'); } catch (_) {}
+
+// Migration: candidate interaction columns on pofu_emails
+try { db.exec('ALTER TABLE pofu_emails ADD COLUMN response_token TEXT'); } catch (_) {}
+try { db.exec('ALTER TABLE pofu_emails ADD COLUMN response_options TEXT'); } catch (_) {}
+try { db.exec('ALTER TABLE pofu_emails ADD COLUMN candidate_response TEXT'); } catch (_) {}
+try { db.exec('ALTER TABLE pofu_emails ADD COLUMN responded_at TEXT'); } catch (_) {}
+try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_pofu_emails_token ON pofu_emails(response_token)'); } catch (_) {}
+
 async function seedUsers() {
   const users = [
     { email: 'pratik@zeople-ai.com',  password: 'password123', role: 'admin',   display_name: 'Pratik' },

@@ -5,11 +5,11 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
 const STATE_LABELS = {
   offer_accepted: 'Offer Accepted',
-  resigned:       'Resigned',
-  bgv:            'BGV',
-  confirmed:      'Confirmed',
+  resigned:       'Notice Period',
+  bgv:            'BGV In Progress',
+  confirmed:      'Joining Confirmed',
   joined:         'Joined',
-  dropped:        'Dropped',
+  dropped:        'Offer Dropped',
 };
 
 const RISK_COLORS = { low: '#10b981', medium: '#f59e0b', high: '#ef4444' };

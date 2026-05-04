@@ -300,6 +300,11 @@ export default function Step3_SourceCandidates({ session, authFetch, onComplete,
         <p className="sw-step-desc">Select candidates from your database, scored against this job's skills.</p>
       </div>
 
+      <div className="ai-disclaimer-banner">
+        <span className="ai-disclaimer-icon">ℹ</span>
+        Match scores and AI content checks are <strong>recommendations only</strong>. All candidate selection decisions require your review and judgement.
+      </div>
+
       {/* Already added */}
       {addedCandidates.length > 0 && (
         <div className="sw-content-card" style={{ marginBottom: 16 }}>

@@ -368,6 +368,120 @@ function BulkUploadModal({ authFetch, onDone, onClose }) {
   );
 }
 
+// ── Qualification Modal ──────────────────────────────────────────────────────
+function QualificationModal({ job, authFetch, onQualified, onClose }) {
+  const [qa,      setQa]      = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+  const [regen,   setRegen]   = useState({});
+  const [error,   setError]   = useState('');
+
+  useEffect(() => { loadQuestions(); }, []);
+
+  const loadQuestions = async () => {
+    setLoading(true); setError('');
+    try {
+      const res  = await authFetch(`${BACKEND_URL}/jobs/${job.id}/qualification-questions`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate questions');
+      setQa(data.questions || []);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  const handleRegenerate = async (idx) => {
+    setRegen(r => ({ ...r, [idx]: true }));
+    try {
+      const res  = await authFetch(`${BACKEND_URL}/jobs/${job.id}/qualification-questions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ regenerateIndex: idx, existingQuestions: qa.map(q => q.question) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to regenerate');
+      if (data.question) setQa(prev => prev.map((item, i) => i === idx ? { ...item, question: data.question } : item));
+    } catch (e) { setError(e.message); }
+    finally { setRegen(r => ({ ...r, [idx]: false })); }
+  };
+
+  const handleAnswer = (idx, val) =>
+    setQa(prev => prev.map((item, i) => i === idx ? { ...item, answer: val } : item));
+
+  const handleMarkQualified = async () => {
+    setSaving(true); setError('');
+    try {
+      const res = await authFetch(`${BACKEND_URL}/jobs/${job.id}/qualify`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ qa }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+      onQualified(job.id);
+      onClose();
+    } catch (e) { setError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="ag-modal-overlay" onClick={onClose}>
+      <div className="ag-modal qual-modal" onClick={e => e.stopPropagation()}>
+        <h3 className="ag-modal-title">📋 Job Qualification — {job.title}</h3>
+        <p className="qual-modal-hint">
+          Use these questions in your HM intake call. Fill in answers, then mark as Qualified — all JD assets will auto-refresh.
+        </p>
+
+        {loading ? (
+          <div className="qual-loading"><span className="spinner" /> Generating clarification questions…</div>
+        ) : error && qa.length === 0 ? (
+          <div className="qual-error">
+            {error}{' '}
+            <button className="ag-btn ag-btn--ghost ag-btn--sm" onClick={loadQuestions}>Retry</button>
+          </div>
+        ) : (
+          <div className="qual-qa-list">
+            {qa.map((item, idx) => (
+              <div key={idx} className="qual-qa-row">
+                <div className="qual-qa-header">
+                  <span className="qual-qa-num">{idx + 1}</span>
+                  <span className="qual-qa-question">{item.question}</span>
+                  <button
+                    className="qual-regen-btn"
+                    onClick={() => handleRegenerate(idx)}
+                    disabled={regen[idx]}
+                    title="Regenerate this question"
+                  >
+                    {regen[idx] ? '…' : '↺ Regen'}
+                  </button>
+                </div>
+                <textarea
+                  className="ag-input qual-qa-answer"
+                  placeholder="HM's answer…"
+                  rows={2}
+                  value={item.answer || ''}
+                  onChange={e => handleAnswer(idx, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && qa.length > 0 && <div className="qual-error" style={{ marginTop: 8 }}>{error}</div>}
+
+        <div className="ag-modal-actions">
+          <button className="ag-btn ag-btn--ghost" onClick={onClose} disabled={saving}>Cancel</button>
+          <button
+            className="ag-btn ag-btn--primary"
+            onClick={handleMarkQualified}
+            disabled={saving || loading || qa.length === 0}
+          >
+            {saving ? 'Qualifying…' : '✓ Mark as Qualified'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main jobs module ─────────────────────────────────────────────────────────
 export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout, onBack }) {
   const [jobs,        setJobs]        = useState([]);
@@ -376,9 +490,10 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
   const [search,      setSearch]      = useState('');
   const [view,        setView]        = useState('list'); // 'list' | 'form'
   const [editJob,     setEditJob]     = useState(null);
-  const [deleteId,    setDeleteId]    = useState(null);
+  const [deleteId,      setDeleteId]      = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [qualifyJobId,  setQualifyJobId]  = useState(null);
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -421,6 +536,9 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
 
   const openCreate = () => { setEditJob(null); setView('form'); };
   const openEdit   = (job) => { setEditJob(job); setView('form'); };
+
+  const handleQualified = (jobId) =>
+    setJobs(prev => prev.map(j => j.id === jobId ? { ...j, is_qualified: true } : j));
 
   // ── Form view ──
   if (view === 'form') {
@@ -525,6 +643,9 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
                       </td>
                       <td>
                         <div className="ag-row-actions">
+                          {!job.is_qualified && (
+                            <button className="ag-action-btn ag-action-btn--qualify" onClick={() => setQualifyJobId(job.id)}>Qualify</button>
+                          )}
                           <button className="ag-action-btn" onClick={() => openEdit(job)}>Edit</button>
                           <button className="ag-action-btn ag-action-btn--danger" onClick={() => setDeleteId(job.id)}>Delete</button>
                         </div>
@@ -544,6 +665,16 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
           authFetch={authFetch}
           onDone={fetchJobs}
           onClose={() => setShowBulkUpload(false)}
+        />
+      )}
+
+      {/* Qualification modal */}
+      {qualifyJobId && (
+        <QualificationModal
+          job={jobs.find(j => j.id === qualifyJobId)}
+          authFetch={authFetch}
+          onQualified={handleQualified}
+          onClose={() => setQualifyJobId(null)}
         />
       )}
 

@@ -351,14 +351,16 @@ router.post('/', async (req, res) => {
   };
 
   const results = {};
-  for (const field of toGenerate) {
-    try {
-      results[field] = await generators[field]();
-    } catch (err) {
-      console.error(`enhance-jd [${field}] error:`, err.message);
-      results[field] = null;
-    }
-  }
+  await Promise.all(
+    toGenerate.map(async field => {
+      try {
+        results[field] = await generators[field]();
+      } catch (err) {
+        console.error(`enhance-jd [${field}] error:`, err.message);
+        results[field] = null;
+      }
+    })
+  );
   res.json(results);
 });
 

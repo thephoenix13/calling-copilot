@@ -300,7 +300,7 @@ router.put('/:id/candidates/:candidateId', (req, res) => {
     'ai_interview_score', 'ai_interview_report_url',
     'decision', 'interview_level',
     'email_sent', 'pipeline_status', 'pipeline_feedback',
-    'resume_score', 'vi_review',
+    'resume_score', 'vi_review', 'assessment_type',
   ];
 
   const sets   = [];

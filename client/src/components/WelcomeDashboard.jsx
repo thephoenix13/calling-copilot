@@ -1,3 +1,7 @@
+import { useEffect, useState } from 'react';
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+
 function getGreeting() {
   const hour = new Date().getHours();
   if (hour < 12) return 'Good morning';
@@ -10,7 +14,12 @@ function getFirstName(displayName) {
   return displayName.split(' ')[0];
 }
 
-/* ── Inline SVG icons (same paths as AppShell.jsx) ─────────────────────── */
+const STEP_LABELS = {
+  1: 'Select JD', 2: 'Enhance JD', 3: 'Source Candidates',
+  4: 'Screening',  5: 'VI Scheduler', 6: 'AI Reports', 7: 'Decision',
+};
+
+/* ── Inline SVG icons ───────────────────────────────────────────────────── */
 
 function IconPhone() {
   return (
@@ -19,7 +28,6 @@ function IconPhone() {
     </svg>
   );
 }
-
 function IconBriefcase() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -28,7 +36,6 @@ function IconBriefcase() {
     </svg>
   );
 }
-
 function IconUsers() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -39,7 +46,6 @@ function IconUsers() {
     </svg>
   );
 }
-
 function IconZap() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -47,7 +53,6 @@ function IconZap() {
     </svg>
   );
 }
-
 function IconGitBranch() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -58,13 +63,22 @@ function IconGitBranch() {
     </svg>
   );
 }
-
 function IconTarget() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10"/>
       <circle cx="12" cy="12" r="6"/>
       <circle cx="12" cy="12" r="2"/>
+    </svg>
+  );
+}
+function IconBarChart() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10"/>
+      <line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6"  y1="20" x2="6"  y2="14"/>
+      <line x1="2"  y1="20" x2="22" y2="20"/>
     </svg>
   );
 }
@@ -116,13 +130,39 @@ const CARDS = [
     Icon: IconTarget,
     beta: true,
   },
+  {
+    id: 'reports',
+    title: 'Reports & Analytics',
+    desc: 'Pipeline funnel, candidate scores, video interview outcomes, POFU stats, and per-job breakdowns.',
+    Icon: IconBarChart,
+  },
 ];
 
 /* ── Component ──────────────────────────────────────────────────────────── */
 
-export default function WelcomeDashboard({ displayName, onNavigate }) {
-  const greeting = getGreeting();
+export default function WelcomeDashboard({ displayName, onNavigate, authFetch }) {
+  const greeting  = getGreeting();
   const firstName = getFirstName(displayName);
+
+  const [stats,    setStats]    = useState({ jobs: null, candidates: null, sessions: null });
+  const [sessions, setSessions] = useState([]);
+
+  useEffect(() => {
+    if (!authFetch) return;
+    Promise.all([
+      authFetch(`${BACKEND_URL}/jobs`).then(r => r.json()).catch(() => null),
+      authFetch(`${BACKEND_URL}/candidates`).then(r => r.json()).catch(() => null),
+      authFetch(`${BACKEND_URL}/sessions`).then(r => r.json()).catch(() => null),
+    ]).then(([jobsData, candidatesData, sessionsData]) => {
+      const allSessions = sessionsData?.sessions || [];
+      setStats({
+        jobs:       jobsData?.jobs?.length       ?? 0,
+        candidates: candidatesData?.candidates?.length ?? 0,
+        sessions:   allSessions.length,
+      });
+      setSessions(allSessions.slice(0, 5));
+    });
+  }, [authFetch]);
 
   return (
     <div className="page-content wd-page">
@@ -132,6 +172,46 @@ export default function WelcomeDashboard({ displayName, onNavigate }) {
         <h1 className="wd-greeting">{greeting}, {firstName}.</h1>
         <p className="wd-subtitle">Welcome to RecruiterOS — your AI-powered recruiting platform.</p>
       </div>
+
+      {/* ── Live stats strip ─────────────────────────────────────────────── */}
+      <div className="wd-stats-strip">
+        <div className="wd-stat-card">
+          <span className="wd-stat-value">{stats.jobs ?? '—'}</span>
+          <span className="wd-stat-label">Active Jobs</span>
+        </div>
+        <div className="wd-stat-card">
+          <span className="wd-stat-value">{stats.candidates ?? '—'}</span>
+          <span className="wd-stat-label">Candidates</span>
+        </div>
+        <div className="wd-stat-card">
+          <span className="wd-stat-value">{stats.sessions ?? '—'}</span>
+          <span className="wd-stat-label">Pipeline Sessions</span>
+        </div>
+      </div>
+
+      {/* ── Recent Sessions ──────────────────────────────────────────────── */}
+      {sessions.length > 0 && (
+        <div className="wd-section">
+          <div className="wd-section-label">Recent Sessions</div>
+          <div className="wd-recent-list">
+            {sessions.map(s => (
+              <div key={s.id} className="wd-recent-row" onClick={() => onNavigate('sessions')}>
+                <div className="wd-recent-info">
+                  <span className="wd-recent-job">{s.job_title || s.name || 'Untitled Session'}</span>
+                  {s.job_client && <span className="wd-recent-client">{s.job_client}</span>}
+                </div>
+                <div className="wd-recent-meta">
+                  <span className="wd-recent-step">{STEP_LABELS[s.current_step] || `Step ${s.current_step}`}</span>
+                  <span className="wd-recent-count">{s.candidate_count} candidate{s.candidate_count !== 1 ? 's' : ''}</span>
+                </div>
+              </div>
+            ))}
+            <button className="wd-recent-view-all" onClick={() => onNavigate('sessions')}>
+              View all sessions →
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── How to get started ───────────────────────────────────────────── */}
       <div className="wd-section">

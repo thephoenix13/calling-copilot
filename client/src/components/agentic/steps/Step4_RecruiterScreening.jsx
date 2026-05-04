@@ -93,15 +93,41 @@ function VoiceNoteModal({ candidateName, existingNote, onSave, onClose }) {
 }
 
 const STATUS_OPTIONS = [
-  { value: 'pending',  label: 'Pending',  cls: 'sw-screen-pending'  },
+  { value: 'pending',  label: 'Pending',   cls: 'sw-screen-pending'   },
   { value: 'pass',     label: 'Shortlist', cls: 'sw-screen-shortlist' },
-  { value: 'fail',     label: 'Reject',   cls: 'sw-screen-reject'   },
-  { value: 'on_hold',  label: 'On Hold',  cls: 'sw-screen-on-hold'  },
+  { value: 'fail',     label: 'Reject',    cls: 'sw-screen-reject'    },
+  { value: 'on_hold',  label: 'On Hold',   cls: 'sw-screen-on-hold'   },
 ];
 
+const ASSESSMENT_OPTIONS = [
+  { value: 'interview',  label: 'Interview'          },
+  { value: 'mcq',        label: 'MCQ Test'            },
+  { value: 'coding',     label: 'Coding Challenge'    },
+  { value: 'sme_panel',  label: 'SME Panel Interview' },
+];
+
+function buildAssessmentEmail(sc, atype, session) {
+  const role = session.job?.title || 'the role';
+  const name = sc.candidate_name;
+  const subjects = {
+    interview:  `Interview Invitation — ${role}`,
+    mcq:        `Assessment Link — ${role}`,
+    coding:     `Coding Challenge — ${role}`,
+    sme_panel:  `SME Panel Invitation — ${role}`,
+  };
+  const bodies = {
+    interview:  `Hi ${name},\n\nThank you for our conversation. We'd like to move you forward with a formal interview for the ${role} position.\n\nWe'll share the interview schedule shortly.\n\nBest regards,\nRecruitment Team`,
+    mcq:        `Hi ${name},\n\nAs the next step for the ${role} position, please complete our online multiple-choice assessment.\n\n[Assessment Link — to be shared]\n\nPlease complete it at your earliest convenience.\n\nBest regards,\nRecruitment Team`,
+    coding:     `Hi ${name},\n\nAs the next step for the ${role} role, please attempt our coding challenge.\n\n[Coding Challenge Link — to be shared]\n\nKindly complete it within 48 hours.\n\nBest regards,\nRecruitment Team`,
+    sme_panel:  `Hi ${name},\n\nWe'd like to schedule an SME panel interview for the ${role} position. Our team will reach out shortly to coordinate a time.\n\nBest regards,\nRecruitment Team`,
+  };
+  return { subject: subjects[atype] || `Next Steps — ${role}`, body: bodies[atype] || '' };
+}
+
 export default function Step4_RecruiterScreening({ session, authFetch, onComplete, onRefresh, onScreenViaCall }) {
-  const [saving,        setSaving]       = useState({});
-  const [voiceNoteFor,  setVoiceNoteFor] = useState(null); // session_candidate object
+  const [saving,         setSaving]        = useState({});
+  const [voiceNoteFor,   setVoiceNoteFor]  = useState(null);
+  const [assessmentType, setAssessmentType] = useState({});
   const candidates = session.candidates || [];
   const passCount  = candidates.filter(c => c.screening_status === 'pass').length;
 
@@ -131,6 +157,24 @@ export default function Step4_RecruiterScreening({ session, authFetch, onComplet
     } finally {
       setSaving(s => ({ ...s, [scId]: false }));
     }
+  };
+
+  const handleAssessmentChange = async (scId, atype) => {
+    setAssessmentType(prev => ({ ...prev, [scId]: atype }));
+    authFetch(`${BACKEND_URL}/sessions/${session.id}/candidates/${scId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assessment_type: atype || null }),
+    }).catch(console.error);
+  };
+
+  const handleSendAssessment = (sc) => {
+    const atype = assessmentType[sc.id] || sc.assessment_type;
+    if (!atype) return;
+    const { subject, body } = buildAssessmentEmail(sc, atype, session);
+    window.open(
+      `mailto:${sc.candidate_email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    );
   };
 
   const handleContinue = async () => {
@@ -201,6 +245,28 @@ export default function Step4_RecruiterScreening({ session, authFetch, onComplet
                         </button>
                       )}
                     </div>
+                    {sc.screening_status === 'pass' && (
+                      <div className="sw-assessment-row">
+                        <select
+                          className="sw-assessment-select"
+                          value={assessmentType[sc.id] ?? (sc.assessment_type || '')}
+                          onChange={e => handleAssessmentChange(sc.id, e.target.value)}
+                        >
+                          <option value="">Send Assessment…</option>
+                          {ASSESSMENT_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                        {(assessmentType[sc.id] || sc.assessment_type) && (
+                          <button
+                            className="sw-assessment-send-btn"
+                            onClick={() => handleSendAssessment(sc)}
+                          >
+                            ✉ Send Email
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
