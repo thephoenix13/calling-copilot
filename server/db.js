@@ -509,31 +509,57 @@ db.exec(`
 
 // ── Schema migrations (safe, idempotent) ────────────────────────────────────
 (function runMigrations() {
-  // Add new columns to users if they don't exist yet (older DBs)
-  const userCols = db.pragma('table_info(users)').map(c => c.name);
-  if (!userCols.includes('company_id')) {
-    try { db.prepare('ALTER TABLE users ADD COLUMN company_id INTEGER').run(); } catch (_) {}
-  }
-  if (!userCols.includes('created_by')) {
-    try { db.prepare('ALTER TABLE users ADD COLUMN created_by INTEGER').run(); } catch (_) {}
-  }
-  if (!userCols.includes('is_active')) {
-    try { db.prepare('ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1').run(); } catch (_) {}
-  }
-
-  // Patch the role CHECK constraint to allow 'superuser' on existing DBs
+  // Rebuild users table if role CHECK constraint doesn't include 'superuser'
   try {
-    db.pragma('writable_schema = ON');
-    const row = db.prepare("SELECT sql FROM sqlite_schema WHERE type='table' AND name='users'").get();
-    if (row && row.sql.includes("'admin', 'subuser'") && !row.sql.includes('superuser')) {
-      db.prepare("UPDATE sqlite_schema SET sql = ? WHERE type='table' AND name='users'")
-        .run(row.sql.replace("CHECK(role IN ('admin', 'subuser'))", "CHECK(role IN ('admin', 'superuser', 'subuser'))"));
-      console.log('✅ Migrated users.role CHECK to include superuser');
+    const userMaster = db.prepare(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'"
+    ).get();
+
+    const needsConstraintFix = userMaster && !userMaster.sql.includes('superuser');
+
+    if (needsConstraintFix) {
+      const cols = db.pragma('table_info(users)').map(c => c.name);
+      // Only copy columns that actually exist in the old table
+      const optionalCols = ['company_id', 'created_by', 'is_active'].filter(c => cols.includes(c));
+      const baseCols     = ['id', 'email', 'password_hash', 'role', 'display_name'];
+      const allCols      = [...baseCols, ...optionalCols, 'created_at'];
+      const colList      = allCols.join(', ');
+
+      db.pragma('foreign_keys = OFF');
+      db.exec(`
+        CREATE TABLE users_v2 (
+          id            INTEGER PRIMARY KEY AUTOINCREMENT,
+          email         TEXT    NOT NULL UNIQUE,
+          password_hash TEXT    NOT NULL,
+          role          TEXT    NOT NULL CHECK(role IN ('admin', 'superuser', 'subuser')),
+          display_name  TEXT,
+          company_id    INTEGER,
+          created_by    INTEGER,
+          is_active     INTEGER NOT NULL DEFAULT 1,
+          created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO users_v2 (${colList}) SELECT ${colList} FROM users;
+        DROP TABLE users;
+        ALTER TABLE users_v2 RENAME TO users;
+      `);
+      db.pragma('foreign_keys = ON');
+      console.log('✅ Migrated users table: role CHECK now includes superuser');
+    } else {
+      // Table already has superuser; just add missing columns
+      const userCols = db.pragma('table_info(users)').map(c => c.name);
+      if (!userCols.includes('company_id')) {
+        try { db.prepare('ALTER TABLE users ADD COLUMN company_id INTEGER').run(); } catch (_) {}
+      }
+      if (!userCols.includes('created_by')) {
+        try { db.prepare('ALTER TABLE users ADD COLUMN created_by INTEGER').run(); } catch (_) {}
+      }
+      if (!userCols.includes('is_active')) {
+        try { db.prepare('ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1').run(); } catch (_) {}
+      }
     }
-    db.pragma('writable_schema = OFF');
   } catch (e) {
-    db.pragma('writable_schema = OFF');
-    console.warn('Role constraint migration skipped:', e.message);
+    console.error('[migration] users table:', e.message);
+    try { db.pragma('foreign_keys = ON'); } catch (_) {}
   }
 })();
 
