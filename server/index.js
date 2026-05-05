@@ -55,6 +55,8 @@ app.use('/sessions',    require('./routes/sessions'));
 app.use('/pofu',        require('./routes/pofu'));
 app.use('/vi',          require('./routes/video-interviews'));
 app.use('/reports',     require('./routes/reports'));
+app.use('/assessments',        require('./routes/assessments'));
+app.use('/coding-assessments', require('./routes/coding-assessments'));
 
 // ── Recording status webhook ────────────────────────────────────────────────
 app.post('/recording-status', async (req, res) => {

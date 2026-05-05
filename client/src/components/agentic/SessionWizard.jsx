@@ -4,6 +4,8 @@ import Step2_EnhanceJD from './steps/Step2_EnhanceJD';
 import Step3_SourceCandidates from './steps/Step3_SourceCandidates';
 import Step4_RecruiterScreening from './steps/Step4_RecruiterScreening';
 import Step5_VideoInterviewScheduler from './steps/Step5_VideoInterviewScheduler';
+import Step5_MCQScheduler from './steps/Step5_MCQScheduler';
+import Step5_CodingScheduler from './steps/Step5_CodingScheduler';
 import Step6_AIInterviewReports from './steps/Step5_AIInterviewReports';
 import Step7_Decision from './steps/Step6_Decision';
 import Step8_PipelineTracker from './steps/Step7_PipelineTracker';
@@ -14,16 +16,38 @@ import {
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
-const STEPS = [
-  { n: 1, label: 'Select JD',   short: 'JD'       },
-  { n: 2, label: 'Enhance JD',  short: 'Enhance'  },
-  { n: 3, label: 'Source',      short: 'Source'   },
-  { n: 4, label: 'Screening',   short: 'Screen'   },
-  { n: 5, label: 'VI Schedule', short: 'Schedule' },
-  { n: 6, label: 'AI Reports',  short: 'Reports'  },
-  { n: 7, label: 'Decision',    short: 'Decision' },
-  { n: 8, label: 'Tracker',     short: 'Tracker'  },
-];
+const STEP5_LABELS = {
+  interview: { label: 'VI Schedule', short: 'Schedule' },
+  mcq:       { label: 'MCQ Round',   short: 'MCQ'      },
+  coding:    { label: 'Coding Round', short: 'Coding'  },
+};
+
+function buildSteps(step5Mode = 'interview') {
+  const s5 = STEP5_LABELS[step5Mode] || STEP5_LABELS.interview;
+  return [
+    { n: 1, label: 'Select JD',   short: 'JD'       },
+    { n: 2, label: 'Enhance JD',  short: 'Enhance'  },
+    { n: 3, label: 'Source',      short: 'Source'   },
+    { n: 4, label: 'Screening',   short: 'Screen'   },
+    { n: 5, label: s5.label,      short: s5.short   },
+    { n: 6, label: 'AI Reports',  short: 'Reports'  },
+    { n: 7, label: 'Decision',    short: 'Decision' },
+    { n: 8, label: 'Tracker',     short: 'Tracker'  },
+  ];
+}
+
+function getStep5Mode(session) {
+  if (!session) return 'interview';
+  const shortlisted = (session.candidates || []).filter(c => c.screening_status === 'pass');
+  const types = shortlisted.map(c => c.assessment_type).filter(Boolean);
+  if (types.length === 0) return 'interview';
+  const counts = types.reduce((acc, t) => { acc[t] = (acc[t] || 0) + 1; return acc; }, {});
+  // Majority wins; 'interview' is the tiebreaker
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  return sorted[0][0] === 'interview' || sorted[0][0] === 'mcq' || sorted[0][0] === 'coding'
+    ? sorted[0][0]
+    : 'interview';
+}
 
 // ── Step gating ──────────────────────────────────────────────────────────────
 function isStepUnlocked(stepNum, session) {
@@ -129,6 +153,8 @@ export default function SessionWizard({ sessionId, authFetch, isLight, onToggleT
   }
 
   const currentActive = activeStep || session.current_step;
+  const step5Mode     = getStep5Mode(session);
+  const STEPS         = buildSteps(step5Mode);
 
   const handleScreenViaCall = onScreenViaCall
     ? (sc) => {
@@ -210,7 +236,9 @@ export default function SessionWizard({ sessionId, authFetch, isLight, onToggleT
         {currentActive === 2 && <Step2_EnhanceJD {...stepProps} />}
         {currentActive === 3 && <Step3_SourceCandidates {...stepProps} />}
         {currentActive === 4 && <Step4_RecruiterScreening {...stepProps} />}
-        {currentActive === 5 && <Step5_VideoInterviewScheduler {...stepProps} />}
+        {currentActive === 5 && step5Mode === 'interview' && <Step5_VideoInterviewScheduler {...stepProps} />}
+        {currentActive === 5 && step5Mode === 'mcq'       && <Step5_MCQScheduler            {...stepProps} />}
+        {currentActive === 5 && step5Mode === 'coding'    && <Step5_CodingScheduler          {...stepProps} />}
         {currentActive === 6 && <Step6_AIInterviewReports {...stepProps} />}
         {currentActive === 7 && <Step7_Decision {...stepProps} />}
         {currentActive === 8 && <Step8_PipelineTracker {...stepProps} />}

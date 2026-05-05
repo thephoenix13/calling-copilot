@@ -19,7 +19,9 @@ const NAV = [
   {
     section: 'Evaluation',
     items: [
-      { id: 'video-interviews', label: 'Video Interviews', icon: IconVideo },
+      { id: 'video-interviews', label: 'Video Interviews',  icon: IconVideo     },
+      { id: 'mcq-assessments',     label: 'MCQ Assessments',    icon: IconClipboard },
+      { id: 'coding-assessments',  label: 'Coding Assessments', icon: IconCode      },
     ],
   },
   {
@@ -107,6 +109,22 @@ function IconTarget() {
     </svg>
   );
 }
+function IconClipboard() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="nav-icon">
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+    </svg>
+  );
+}
+function IconCode() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="nav-icon">
+      <polyline points="16 18 22 12 16 6"/>
+      <polyline points="8 6 2 12 8 18"/>
+    </svg>
+  );
+}
 function IconSun() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15 }}>
@@ -133,10 +151,10 @@ export default function AppShell({ children, currentView, onNavigate, isLight, o
       <aside className="sidebar">
         {/* Logo */}
         <div className="sidebar-logo">
-          <div className="sidebar-logo-mark">R</div>
+          <div className="sidebar-logo-mark">Z</div>
           <div className="sidebar-logo-text">
-            <span className="sidebar-product">RecruiterOS</span>
-            <span className="sidebar-tagline">Recruiting AI</span>
+            <span className="sidebar-product">Zeople</span>
+            <span className="sidebar-tagline">RecruiterOS</span>
           </div>
         </div>
 

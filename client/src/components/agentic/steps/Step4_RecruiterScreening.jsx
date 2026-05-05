@@ -100,26 +100,23 @@ const STATUS_OPTIONS = [
 ];
 
 const ASSESSMENT_OPTIONS = [
-  { value: 'interview',  label: 'Interview'          },
-  { value: 'mcq',        label: 'MCQ Test'            },
-  { value: 'coding',     label: 'Coding Challenge'    },
-  { value: 'sme_panel',  label: 'SME Panel Interview' },
+  { value: 'interview', label: 'AI Video Interview' },
+  { value: 'mcq',       label: 'MCQ Test'           },
+  { value: 'coding',    label: 'Coding Challenge'   },
 ];
 
 function buildAssessmentEmail(sc, atype, session) {
   const role = session.job?.title || 'the role';
   const name = sc.candidate_name;
   const subjects = {
-    interview:  `Interview Invitation — ${role}`,
-    mcq:        `Assessment Link — ${role}`,
-    coding:     `Coding Challenge — ${role}`,
-    sme_panel:  `SME Panel Invitation — ${role}`,
+    interview: `Interview Invitation — ${role}`,
+    mcq:       `Assessment Link — ${role}`,
+    coding:    `Coding Challenge — ${role}`,
   };
   const bodies = {
-    interview:  `Hi ${name},\n\nThank you for our conversation. We'd like to move you forward with a formal interview for the ${role} position.\n\nWe'll share the interview schedule shortly.\n\nBest regards,\nRecruitment Team`,
-    mcq:        `Hi ${name},\n\nAs the next step for the ${role} position, please complete our online multiple-choice assessment.\n\n[Assessment Link — to be shared]\n\nPlease complete it at your earliest convenience.\n\nBest regards,\nRecruitment Team`,
-    coding:     `Hi ${name},\n\nAs the next step for the ${role} role, please attempt our coding challenge.\n\n[Coding Challenge Link — to be shared]\n\nKindly complete it within 48 hours.\n\nBest regards,\nRecruitment Team`,
-    sme_panel:  `Hi ${name},\n\nWe'd like to schedule an SME panel interview for the ${role} position. Our team will reach out shortly to coordinate a time.\n\nBest regards,\nRecruitment Team`,
+    interview: `Hi ${name},\n\nThank you for our conversation. We'd like to move you forward with an AI video interview for the ${role} position.\n\nYou'll receive a separate link to complete the interview at your convenience.\n\nBest regards,\nRecruitment Team`,
+    mcq:       `Hi ${name},\n\nAs the next step for the ${role} position, please complete our online multiple-choice assessment.\n\n[Assessment Link — to be shared]\n\nPlease complete it at your earliest convenience.\n\nBest regards,\nRecruitment Team`,
+    coding:    `Hi ${name},\n\nAs the next step for the ${role} role, please attempt our coding challenge.\n\n[Coding Challenge Link — to be shared]\n\nKindly complete it within 48 hours.\n\nBest regards,\nRecruitment Team`,
   };
   return { subject: subjects[atype] || `Next Steps — ${role}`, body: bodies[atype] || '' };
 }

@@ -374,6 +374,124 @@ try { db.exec('ALTER TABLE pofu_emails ADD COLUMN candidate_response TEXT'); } c
 try { db.exec('ALTER TABLE pofu_emails ADD COLUMN responded_at TEXT'); } catch (_) {}
 try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_pofu_emails_token ON pofu_emails(response_token)'); } catch (_) {}
 
+// ── MCQ Assessment tables ─────────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS assessments (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    job_id          INTEGER REFERENCES jobs(id),
+    title           TEXT    NOT NULL,
+    description     TEXT,
+    instructions    TEXT,
+    time_limit_min  INTEGER NOT NULL DEFAULT 30,
+    pass_score      INTEGER NOT NULL DEFAULT 60,
+    status          TEXT    NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','active','closed')),
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_assessments_user ON assessments(user_id);
+
+  CREATE TABLE IF NOT EXISTS assessment_questions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id   INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    question_text   TEXT    NOT NULL,
+    options         TEXT    NOT NULL DEFAULT '[]',
+    correct_option  TEXT    NOT NULL,
+    explanation     TEXT,
+    topic           TEXT,
+    difficulty      TEXT    NOT NULL DEFAULT 'medium' CHECK(difficulty IN ('easy','medium','hard')),
+    order_num       INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_aq_assessment ON assessment_questions(assessment_id);
+
+  CREATE TABLE IF NOT EXISTS assessment_invites (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id   INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    candidate_id    INTEGER REFERENCES candidates(id),
+    candidate_name  TEXT    NOT NULL,
+    candidate_email TEXT    NOT NULL,
+    token           TEXT    NOT NULL UNIQUE,
+    status          TEXT    NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','started','completed')),
+    invited_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    started_at      TEXT,
+    completed_at    TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_ai_assessment ON assessment_invites(assessment_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_token ON assessment_invites(token);
+
+  CREATE TABLE IF NOT EXISTS assessment_submissions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    invite_id       INTEGER NOT NULL REFERENCES assessment_invites(id) ON DELETE CASCADE,
+    assessment_id   INTEGER NOT NULL REFERENCES assessments(id),
+    answers         TEXT    NOT NULL DEFAULT '{}',
+    score           INTEGER,
+    correct_count   INTEGER,
+    total_questions INTEGER,
+    time_taken_sec  INTEGER,
+    ai_evaluation   TEXT,
+    submitted_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_as_invite ON assessment_submissions(invite_id);
+`);
+
+// ── Coding Assessment tables ──────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS coding_assessments (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id        INTEGER NOT NULL REFERENCES users(id),
+    job_id         INTEGER REFERENCES jobs(id),
+    title          TEXT    NOT NULL,
+    description    TEXT,
+    instructions   TEXT,
+    time_limit_min INTEGER NOT NULL DEFAULT 60,
+    pass_score     INTEGER NOT NULL DEFAULT 60,
+    status         TEXT    NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','active','closed')),
+    created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_ca_user ON coding_assessments(user_id);
+
+  CREATE TABLE IF NOT EXISTS coding_questions (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id     INTEGER NOT NULL REFERENCES coding_assessments(id) ON DELETE CASCADE,
+    title             TEXT    NOT NULL,
+    problem_statement TEXT    NOT NULL,
+    starter_code      TEXT,
+    language          TEXT    NOT NULL DEFAULT 'javascript',
+    question_type     TEXT    NOT NULL DEFAULT 'write' CHECK(question_type IN ('write','fix','complete')),
+    difficulty        TEXT    NOT NULL DEFAULT 'medium' CHECK(difficulty IN ('easy','medium','hard')),
+    topic             TEXT,
+    order_num         INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_cq_assessment ON coding_questions(assessment_id);
+
+  CREATE TABLE IF NOT EXISTS coding_invites (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id   INTEGER NOT NULL REFERENCES coding_assessments(id) ON DELETE CASCADE,
+    candidate_id    INTEGER REFERENCES candidates(id),
+    candidate_name  TEXT    NOT NULL,
+    candidate_email TEXT    NOT NULL,
+    token           TEXT    NOT NULL UNIQUE,
+    status          TEXT    NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','started','completed')),
+    invited_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    started_at      TEXT,
+    completed_at    TEXT
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_ci_token ON coding_invites(token);
+
+  CREATE TABLE IF NOT EXISTS coding_submissions (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    invite_id      INTEGER NOT NULL REFERENCES coding_invites(id) ON DELETE CASCADE,
+    assessment_id  INTEGER NOT NULL REFERENCES coding_assessments(id),
+    answers        TEXT    NOT NULL DEFAULT '{}',
+    score          INTEGER,
+    ai_evaluation  TEXT,
+    time_taken_sec INTEGER,
+    submitted_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_csub_invite ON coding_submissions(invite_id);
+`);
+
 async function seedUsers() {
   const users = [
     { email: 'pratik@zeople-ai.com',  password: 'password123', role: 'admin',   display_name: 'Pratik' },

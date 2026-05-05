@@ -316,6 +316,15 @@ export default function CandidateEvaluationReport({ reportData: propData }) {
   const { meta, verdict, technical, behavioral, strengths, concerns, highlights, compensation, recommendation } = propData ?? reportData;
   const reportRef = useRef(null);
   const [exporting, setExporting] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    const text = reportRef.current?.innerText || '';
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
 
   const rawScore = technical.reduce((a, t) => a + t.score, 0);
   const rawMax   = technical.reduce((a, t) => a + t.max, 0);
@@ -364,6 +373,16 @@ export default function CandidateEvaluationReport({ reportData: propData }) {
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <span style={{ fontSize: 11, color: C.textFaint, fontFamily: "monospace" }}>{meta.reportId}</span>
+            <button onClick={handleCopy} style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "7px 14px", borderRadius: 8, cursor: "pointer",
+              background: copied ? "rgba(16,185,129,0.12)" : C.innerBg,
+              border: `1px solid ${copied ? "rgba(16,185,129,0.4)" : C.border}`,
+              color: copied ? "#10b981" : C.textMuted,
+              fontSize: 12, fontWeight: 600, transition: "all 0.2s",
+            }}>
+              {copied ? "✓ Copied" : "📋 Copy"}
+            </button>
             <button onClick={handleExportPDF} disabled={exporting} style={{
               display: "flex", alignItems: "center", gap: 6,
               padding: "7px 14px", borderRadius: 8, cursor: exporting ? "not-allowed" : "pointer",
@@ -584,7 +603,7 @@ export default function CandidateEvaluationReport({ reportData: propData }) {
           display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
           <span style={{ fontSize: 11, color: C.textFaint }}>
-            Prepared by {meta.recruiter} · RecruiterOS · {meta.date} · {meta.time}
+            Prepared by {meta.recruiter} · Zeople | RecruiterOS · {meta.date} · {meta.time}
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             {["Submit to Client", "Request Second Opinion", "Archive"].map((label) => (

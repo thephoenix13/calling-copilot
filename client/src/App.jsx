@@ -21,6 +21,10 @@ import VideoInterviewModule from './components/agentic/VideoInterviewModule';
 import ReportsModule from './components/agentic/ReportsModule';
 import CandidateFlow from './components/video/CandidateFlow';
 import CandidateResponsePage from './components/CandidateResponsePage';
+import AssessmentsModule from './components/agentic/AssessmentsModule';
+import CandidateAssessment from './components/assessment/CandidateAssessment';
+import CodingAssessmentsModule from './components/agentic/CodingAssessmentsModule';
+import CandidateCodingAssessment from './components/assessment/CandidateCodingAssessment';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -58,8 +62,10 @@ CTC: ₹7.5 LPA | Expected: ₹11–12 LPA | Notice: 30 days`,
 
 export default function App() {
   // ── Public candidate routes ───────────────────────────────────────────────
-  if (window.location.pathname === '/interview') return <CandidateFlow />;
-  if (window.location.pathname === '/respond')   return <CandidateResponsePage />;
+  if (window.location.pathname === '/interview')  return <CandidateFlow />;
+  if (window.location.pathname === '/respond')    return <CandidateResponsePage />;
+  if (window.location.pathname === '/assessment')        return <CandidateAssessment />;
+  if (window.location.pathname === '/coding-assessment') return <CandidateCodingAssessment />;
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   const [userRole, setUserRole] = useState(() => {
@@ -488,6 +494,8 @@ export default function App() {
   if (view === 'jd-enhancer') return <AppShell {...shellProps}><JDEnhancer       {...moduleProps} /></AppShell>;
   if (view === 'pofu')             return <AppShell {...shellProps}><POFUModule           {...moduleProps} /></AppShell>;
   if (view === 'video-interviews') return <AppShell {...shellProps}><VideoInterviewModule authFetch={authFetch} /></AppShell>;
+  if (view === 'mcq-assessments')     return <AppShell {...shellProps}><AssessmentsModule      {...moduleProps} onNavigate={navigate} /></AppShell>;
+  if (view === 'coding-assessments')  return <AppShell {...shellProps}><CodingAssessmentsModule {...moduleProps} onNavigate={navigate} /></AppShell>;
   if (view === 'reports')          return <AppShell {...shellProps}><ReportsModule authFetch={authFetch} /></AppShell>;
 
   if (view === 'sessions') {
