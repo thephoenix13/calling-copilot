@@ -13,8 +13,23 @@ db.exec(`
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     email         TEXT    NOT NULL UNIQUE,
     password_hash TEXT    NOT NULL,
-    role          TEXT    NOT NULL CHECK(role IN ('admin', 'subuser')),
+    role          TEXT    NOT NULL CHECK(role IN ('admin', 'superuser', 'subuser')),
     display_name  TEXT,
+    company_id    INTEGER,
+    created_by    INTEGER,
+    is_active     INTEGER NOT NULL DEFAULT 1,
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS companies (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id      INTEGER NOT NULL,
+    name          TEXT    NOT NULL,
+    industry      TEXT,
+    website       TEXT,
+    logo_url      TEXT,
+    address       TEXT,
+    contact_email TEXT,
     created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -492,20 +507,64 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_csub_invite ON coding_submissions(invite_id);
 `);
 
+// ── Schema migrations (safe, idempotent) ────────────────────────────────────
+(function runMigrations() {
+  // Add new columns to users if they don't exist yet (older DBs)
+  const userCols = db.pragma('table_info(users)').map(c => c.name);
+  if (!userCols.includes('company_id')) {
+    try { db.prepare('ALTER TABLE users ADD COLUMN company_id INTEGER').run(); } catch (_) {}
+  }
+  if (!userCols.includes('created_by')) {
+    try { db.prepare('ALTER TABLE users ADD COLUMN created_by INTEGER').run(); } catch (_) {}
+  }
+  if (!userCols.includes('is_active')) {
+    try { db.prepare('ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1').run(); } catch (_) {}
+  }
+
+  // Patch the role CHECK constraint to allow 'superuser' on existing DBs
+  try {
+    db.pragma('writable_schema = ON');
+    const row = db.prepare("SELECT sql FROM sqlite_schema WHERE type='table' AND name='users'").get();
+    if (row && row.sql.includes("'admin', 'subuser'") && !row.sql.includes('superuser')) {
+      db.prepare("UPDATE sqlite_schema SET sql = ? WHERE type='table' AND name='users'")
+        .run(row.sql.replace("CHECK(role IN ('admin', 'subuser'))", "CHECK(role IN ('admin', 'superuser', 'subuser'))"));
+      console.log('✅ Migrated users.role CHECK to include superuser');
+    }
+    db.pragma('writable_schema = OFF');
+  } catch (e) {
+    db.pragma('writable_schema = OFF');
+    console.warn('Role constraint migration skipped:', e.message);
+  }
+})();
+
 async function seedUsers() {
   const users = [
-    { email: 'pratik@zeople-ai.com',  password: 'password123', role: 'admin',   display_name: 'Pratik' },
-    { email: 'divakar@zeople-ai.com', password: 'password123', role: 'subuser', display_name: 'Divakar' },
+    { email: 'pratik@zeople-ai.com',  password: 'password123', role: 'admin',     display_name: 'Pratik'  },
+    { email: 'divakar@zeople-ai.com', password: 'password123', role: 'superuser', display_name: 'Divakar' },
   ];
 
   for (const user of users) {
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(user.email);
+    const existing = db.prepare('SELECT id, role FROM users WHERE email = ?').get(user.email);
     if (!existing) {
       const hash = await bcrypt.hash(user.password, 10);
       db.prepare('INSERT INTO users (email, password_hash, role, display_name) VALUES (?, ?, ?, ?)')
         .run(user.email, hash, user.role, user.display_name);
-      console.log(`✅ Seeded user: ${user.email}`);
+      console.log(`✅ Seeded user: ${user.email} (${user.role})`);
+    } else if (existing.role !== user.role) {
+      // Upgrade Divakar from subuser → superuser on restart
+      db.prepare('UPDATE users SET role = ? WHERE email = ?').run(user.role, user.email);
+      console.log(`✅ Updated role for ${user.email}: ${existing.role} → ${user.role}`);
     }
+  }
+
+  // Seed Divakar's company if not yet created
+  const divakar = db.prepare('SELECT id, company_id FROM users WHERE email = ?').get('divakar@zeople-ai.com');
+  if (divakar && !divakar.company_id) {
+    const co = db.prepare(
+      `INSERT INTO companies (owner_id, name, industry, contact_email) VALUES (?, ?, ?, ?)`
+    ).run(divakar.id, 'Zeople AI', 'Recruitment Technology', 'divakar@zeople-ai.com');
+    db.prepare('UPDATE users SET company_id = ? WHERE id = ?').run(co.lastInsertRowid, divakar.id);
+    console.log('✅ Seeded company for Divakar');
   }
 }
 

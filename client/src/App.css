@@ -6686,3 +6686,41 @@ body {
 .ca-result-pass  { color: #34d399; }
 .ca-result-fail  { color: #f87171; }
 
+/* ── Settings Module ─────────────────────────────────────────────────────── */
+.sett-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.sett-tab-btn { background: none; border: none; padding: 10px 18px; font-size: 13.5px; font-weight: 500; color: var(--text-2); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; }
+.sett-tab-btn:hover { color: var(--text-1); }
+.sett-tab-btn--active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.sett-content { padding: 0 2px; }
+.sett-section { display: flex; flex-direction: column; gap: 20px; }
+.sett-section-title { font-size: 15px; font-weight: 600; color: var(--text-1); }
+.sett-section-subtitle { font-size: 12.5px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }
+.sett-section-header { display: flex; align-items: center; justify-content: space-between; }
+.sett-loading { font-size: 13px; color: var(--text-3); padding: 12px 0; }
+.sett-empty   { font-size: 13px; color: var(--text-3); padding: 24px 0; text-align: center; }
+.sett-error   { font-size: 13px; color: #f87171; background: rgba(248,113,113,.08); border: 1px solid rgba(248,113,113,.2); border-radius: 8px; padding: 10px 14px; }
+.sett-footer  { display: flex; gap: 10px; padding-top: 8px; }
+.sett-divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+.sett-req { color: var(--accent); }
+
+.sett-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.sett-form-stack { display: flex; flex-direction: column; gap: 14px; }
+.sett-label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 500; color: var(--text-2); }
+.sett-label--full { grid-column: 1 / -1; }
+.sett-input { padding: 8px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text-1); font-size: 13px; outline: none; transition: border-color .15s; }
+.sett-input:focus { border-color: var(--accent); }
+.sett-input option { background: var(--bg-card); }
+
+.sett-team-list { display: flex; flex-direction: column; gap: 8px; }
+.sett-team-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; transition: border-color .15s; }
+.sett-team-row:hover { border-color: var(--accent-border); }
+.sett-team-row--inactive { opacity: .55; }
+.sett-team-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--accent-dim); color: var(--accent); font-size: 15px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.sett-team-info { flex: 1; min-width: 0; }
+.sett-team-name { font-size: 13.5px; font-weight: 600; color: var(--text-1); }
+.sett-team-meta { display: flex; align-items: center; gap: 8px; margin-top: 2px; font-size: 12px; color: var(--text-3); flex-wrap: wrap; }
+.sett-team-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.sett-role-badge { background: var(--bg-elevated); border-radius: 5px; padding: 2px 7px; font-size: 11px; font-weight: 500; color: var(--text-2); }
+.sett-inactive-badge { background: rgba(248,113,113,.12); border-radius: 5px; padding: 2px 7px; font-size: 11px; font-weight: 500; color: #f87171; }
+

@@ -25,6 +25,7 @@ import AssessmentsModule from './components/agentic/AssessmentsModule';
 import CandidateAssessment from './components/assessment/CandidateAssessment';
 import CodingAssessmentsModule from './components/agentic/CodingAssessmentsModule';
 import CandidateCodingAssessment from './components/assessment/CandidateCodingAssessment';
+import SettingsModule from './components/agentic/SettingsModule';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -474,6 +475,7 @@ export default function App() {
     onToggleTheme: () => setIsLight(l => !l),
     onLogout: handleLogout,
     displayName,
+    userRole,
   };
 
   const moduleProps = { authFetch, userRole, isLight, onToggleTheme: () => setIsLight(l => !l), onLogout: handleLogout };
@@ -497,6 +499,7 @@ export default function App() {
   if (view === 'mcq-assessments')     return <AppShell {...shellProps}><AssessmentsModule      {...moduleProps} onNavigate={navigate} /></AppShell>;
   if (view === 'coding-assessments')  return <AppShell {...shellProps}><CodingAssessmentsModule {...moduleProps} onNavigate={navigate} /></AppShell>;
   if (view === 'reports')          return <AppShell {...shellProps}><ReportsModule authFetch={authFetch} /></AppShell>;
+  if (view === 'settings')         return <AppShell {...shellProps}><SettingsModule authFetch={authFetch} /></AppShell>;
 
   if (view === 'sessions') {
     if (sessionId) {
