@@ -256,6 +256,86 @@ No markdown code fences in your response.`;
   console.log(`[qualify] JD assets refreshed for job ${job.id}`);
 }
 
+// GET /jobs/:id/matched-candidates — score all active candidates against this job
+router.get('/:id/matched-candidates', (req, res) => {
+  const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Job not found.' });
+
+  const reqSkills  = JSON.parse(job.required_skills  || '[]').map(s => s.toLowerCase());
+  const prefSkills = JSON.parse(job.preferred_skills || '[]').map(s => s.toLowerCase());
+  const expMin     = job.experience_min;
+  const expMax     = job.experience_max;
+
+  const candidates = db.prepare("SELECT * FROM candidates WHERE status = 'active'").all();
+
+  const scored = candidates.map(c => {
+    const candSkills = JSON.parse(c.skills || '[]').map(s => s.toLowerCase());
+
+    // Skill matching — partial substring match for flexibility
+    const matchSkill = (jobSkill, cs) =>
+      cs.some(s => s.includes(jobSkill) || jobSkill.includes(s));
+
+    const matchedReq  = reqSkills.filter(s  => matchSkill(s, candSkills));
+    const matchedPref = prefSkills.filter(s => matchSkill(s, candSkills));
+
+    const reqScore  = reqSkills.length  > 0 ? matchedReq.length  / reqSkills.length  : 1;
+    const prefScore = prefSkills.length > 0 ? matchedPref.length / prefSkills.length : 1;
+
+    // Experience score
+    const exp = c.experience_years || 0;
+    let expScore = 1;
+    if (expMin != null && exp < expMin) expScore = Math.max(0, 1 - (expMin - exp) / Math.max(expMin, 1));
+    if (expMax != null && exp > expMax + 2) expScore = Math.max(0.5, 1 - (exp - expMax) / Math.max(expMax, 1));
+
+    const totalScore = Math.round((reqScore * 0.65 + prefScore * 0.15 + expScore * 0.20) * 100);
+
+    return {
+      id:               c.id,
+      name:             c.name,
+      email:            c.email,
+      phone:            c.phone,
+      location:         c.location,
+      current_title:    c.current_title,
+      current_company:  c.current_company,
+      experience_years: c.experience_years,
+      skills:           JSON.parse(c.skills || '[]'),
+      education:        c.education,
+      match_score:      totalScore,
+      matched_required: matchedReq,
+      matched_preferred: matchedPref,
+    };
+  });
+
+  const results = scored
+    .filter(c => c.match_score >= 25)
+    .sort((a, b) => b.match_score - a.match_score)
+    .slice(0, 40);
+
+  res.json({ candidates: results, total_pool: candidates.length });
+});
+
+// GET /jobs/:id/enhancement — most recent saved JD Enhancer assets for this job
+router.get('/:id/enhancement', (req, res) => {
+  const job = db.prepare('SELECT id FROM jobs WHERE id = ?').get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Job not found.' });
+
+  // Look up the most recent pipeline session for this job that has enhancement assets
+  const session = db.prepare(`
+    SELECT enhancement_data, updated_at
+    FROM sessions
+    WHERE job_id = ? AND enhancement_saved = 1 AND enhancement_data IS NOT NULL
+    ORDER BY updated_at DESC
+    LIMIT 1
+  `).get(req.params.id);
+
+  if (!session) return res.json({ enhancement: null });
+
+  let enhancement = null;
+  try { enhancement = JSON.parse(session.enhancement_data); } catch (_) {}
+
+  res.json({ enhancement, generated_at: session.updated_at });
+});
+
 // DELETE /jobs/:id
 router.delete('/:id', (req, res) => {
   const existing = db.prepare('SELECT id FROM jobs WHERE id = ?').get(req.params.id);

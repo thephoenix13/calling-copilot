@@ -1,4 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  FormattedJDTab, RecruiterBriefTab, ClarificationsReadOnly,
+  ReachoutTab, KeywordsTab, stripMarkers,
+} from './JDEnhancerTabs';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -482,14 +486,273 @@ function QualificationModal({ job, authFetch, onQualified, onClose }) {
   );
 }
 
+// ── Job Detail view ──────────────────────────────────────────────────────────
+const JD_ASSET_TABS = [
+  { key: 'jd',        label: 'Formatted JD',   field: 'formattedJD'            },
+  { key: 'brief',     label: 'Recruiter Brief', field: 'recruiterBrief'         },
+  { key: 'questions', label: 'Clarifications',  field: 'clarificationQuestions' },
+  { key: 'reachout',  label: 'Reachout',        field: 'reachoutMaterial'       },
+  { key: 'keywords',  label: 'Keywords',        field: 'sourcingKeywords'       },
+];
+
+function JobDetail({ job, authFetch, onBack, onEdit, onDelete }) {
+  const [candidates,    setCandidates]    = useState([]);
+  const [matchLoading,  setMatchLoading]  = useState(true);
+  const [totalPool,     setTotalPool]     = useState(0);
+  const [enhancement,   setEnhancement]   = useState(undefined); // undefined = loading, null = none
+  const [activeAssetTab, setActiveAssetTab] = useState('jd');
+
+  useEffect(() => {
+    (async () => {
+      setMatchLoading(true);
+      try {
+        const res  = await authFetch(`${BACKEND_URL}/jobs/${job.id}/matched-candidates`);
+        const data = await res.json();
+        setCandidates(data.candidates || []);
+        setTotalPool(data.total_pool  || 0);
+      } catch { setCandidates([]); }
+      finally  { setMatchLoading(false); }
+    })();
+
+    authFetch(`${BACKEND_URL}/jobs/${job.id}/enhancement`)
+      .then(r => r.json())
+      .then(d => setEnhancement(d.enhancement || null))
+      .catch(() => setEnhancement(null));
+  }, [job.id, authFetch]);
+
+  const copyAssetTab = (tabKey) => {
+    const tab = JD_ASSET_TABS.find(t => t.key === tabKey);
+    const content = enhancement?.[tab.field];
+    const text = typeof content === 'string' ? stripMarkers(content) : JSON.stringify(content, null, 2);
+    navigator.clipboard.writeText(text).catch(() => {});
+  };
+
+  const sc = STATUS_COLORS[job.status] || STATUS_COLORS.closed;
+
+  const scoreColor = (s) => {
+    if (s >= 80) return { bg: 'rgba(34,197,94,0.12)',  color: '#16a34a', border: 'rgba(34,197,94,0.3)' };
+    if (s >= 60) return { bg: 'rgba(249,115,22,0.12)', color: '#ea580c', border: 'rgba(249,115,22,0.3)' };
+    if (s >= 40) return { bg: 'rgba(245,158,11,0.12)', color: '#d97706', border: 'rgba(245,158,11,0.3)' };
+    return           { bg: 'rgba(100,116,139,0.10)',   color: '#64748b', border: 'rgba(100,116,139,0.25)' };
+  };
+
+  return (
+    <div className="jd-detail">
+      {/* ── Header ── */}
+      <div className="jd-detail-header">
+        <button className="ag-btn ag-btn--ghost" onClick={onBack}>← Back to Jobs</button>
+        <div className="jd-detail-actions">
+          <button className="ag-btn ag-btn--ghost" onClick={() => onEdit(job)}>Edit Job</button>
+          <button className="ag-btn ag-btn--danger" onClick={() => onDelete(job.id)}>Delete</button>
+        </div>
+      </div>
+
+      {/* ── Job card ── */}
+      <div className="jd-detail-card">
+        <div className="jd-detail-title-row">
+          <div>
+            <h1 className="jd-detail-title">{job.title}</h1>
+            {job.department && <p className="jd-detail-dept">{job.department}</p>}
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {job.is_qualified && <span className="ag-qualified-badge">✓ Qualified</span>}
+            <span className="ag-status-badge" style={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
+              {job.status}
+            </span>
+          </div>
+        </div>
+
+        {/* Meta grid */}
+        <div className="jd-detail-meta">
+          {job.client_name && (
+            <div className="jd-meta-item">
+              <span className="jd-meta-label">Client</span>
+              <span className="jd-meta-value">{job.client_name}</span>
+            </div>
+          )}
+          {job.location && (
+            <div className="jd-meta-item">
+              <span className="jd-meta-label">Location</span>
+              <span className="jd-meta-value">{job.location}</span>
+            </div>
+          )}
+          <div className="jd-meta-item">
+            <span className="jd-meta-label">Type</span>
+            <span className="jd-meta-value">{job.employment_type}</span>
+          </div>
+          {(job.experience_min != null || job.experience_max != null) && (
+            <div className="jd-meta-item">
+              <span className="jd-meta-label">Experience</span>
+              <span className="jd-meta-value">{job.experience_min ?? '?'}–{job.experience_max ?? '?'} years</span>
+            </div>
+          )}
+          {(job.salary_min != null || job.salary_max != null) && (
+            <div className="jd-meta-item">
+              <span className="jd-meta-label">Salary (LPA)</span>
+              <span className="jd-meta-value">₹{job.salary_min ?? '?'}–{job.salary_max ?? '?'}</span>
+            </div>
+          )}
+          <div className="jd-meta-item">
+            <span className="jd-meta-label">Openings</span>
+            <span className="jd-meta-value">{job.openings_count}</span>
+          </div>
+        </div>
+
+        {/* Skills */}
+        {job.required_skills?.length > 0 && (
+          <div className="jd-detail-section">
+            <p className="jd-section-label">Required Skills</p>
+            <div className="ag-skill-preview">
+              {job.required_skills.map(s => <span key={s} className="skill-chip skill-chip--required">{s}</span>)}
+            </div>
+          </div>
+        )}
+        {job.preferred_skills?.length > 0 && (
+          <div className="jd-detail-section">
+            <p className="jd-section-label">Preferred Skills</p>
+            <div className="ag-skill-preview">
+              {job.preferred_skills.map(s => <span key={s} className="skill-chip">{s}</span>)}
+            </div>
+          </div>
+        )}
+
+        {/* Description */}
+        {job.description && (
+          <div className="jd-detail-section">
+            <p className="jd-section-label">Description</p>
+            <p className="jd-description">{job.description}</p>
+          </div>
+        )}
+      </div>
+
+      {/* ── JD Enhancer Assets ── */}
+      <div className="jd-assets-section">
+        <div className="jd-assets-section-header">
+          <h2 className="jd-assets-title">JD Enhancer Assets</h2>
+          {enhancement === undefined && (
+            <span style={{ fontSize: 13, color: 'var(--text-3)' }}>Loading…</span>
+          )}
+        </div>
+
+        {enhancement === null && enhancement !== undefined && (
+          <div className="jd-assets-empty">
+            No assets yet. Run the <strong>JD Enhancer</strong> for this role inside a Pipeline Session to generate the formatted JD, recruiter brief, reachout copy, and more.
+          </div>
+        )}
+
+        {enhancement && (
+          <>
+            <div className="jde-tab-bar" style={{ marginBottom: 0 }}>
+              {JD_ASSET_TABS.map(tab => (
+                <button
+                  key={tab.key}
+                  className={`jde-tab-btn${activeAssetTab === tab.key ? ' jde-tab-btn--active' : ''}`}
+                  onClick={() => setActiveAssetTab(tab.key)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+              <button
+                className="ag-btn ag-btn--ghost ag-btn--sm"
+                style={{ marginLeft: 'auto' }}
+                onClick={() => copyAssetTab(activeAssetTab)}
+              >
+                📋 Copy
+              </button>
+            </div>
+            <div className="jd-assets-tab-content jde-tab-content">
+              {activeAssetTab === 'jd'        && (enhancement.formattedJD
+                ? <FormattedJDTab content={enhancement.formattedJD} />
+                : <div className="rpt-empty">Not generated yet.</div>)}
+              {activeAssetTab === 'brief'     && (enhancement.recruiterBrief
+                ? <RecruiterBriefTab content={enhancement.recruiterBrief} />
+                : <div className="rpt-empty">Not generated yet.</div>)}
+              {activeAssetTab === 'questions' && <ClarificationsReadOnly content={enhancement.clarificationQuestions} />}
+              {activeAssetTab === 'reachout'  && (enhancement.reachoutMaterial
+                ? <ReachoutTab content={enhancement.reachoutMaterial} />
+                : <div className="rpt-empty">Not generated yet.</div>)}
+              {activeAssetTab === 'keywords'  && (enhancement.sourcingKeywords
+                ? <KeywordsTab content={enhancement.sourcingKeywords} />
+                : <div className="rpt-empty">Not generated yet.</div>)}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Matched candidates ── */}
+      <div className="jd-matched-header">
+        <div>
+          <h2 className="jd-matched-title">Matched Candidates</h2>
+          <p className="jd-matched-sub">
+            {matchLoading ? 'Scoring candidates…' : `${candidates.length} matches from ${totalPool} in your database`}
+          </p>
+        </div>
+      </div>
+
+      {matchLoading ? (
+        <div className="ag-empty"><span className="spinner" /> Scoring candidates…</div>
+      ) : candidates.length === 0 ? (
+        <div className="ag-empty"><p>No candidates scored above the match threshold.</p></div>
+      ) : (
+        <div className="ag-table-wrap">
+          <table className="ag-table">
+            <thead>
+              <tr>
+                <th>Candidate</th>
+                <th>Current Role</th>
+                <th>Company</th>
+                <th>Exp</th>
+                <th>Match</th>
+                <th>Matched Skills</th>
+              </tr>
+            </thead>
+            <tbody>
+              {candidates.map(c => {
+                const sc2 = scoreColor(c.match_score);
+                return (
+                  <tr key={c.id}>
+                    <td>
+                      <span className="ag-candidate-name">{c.name}</span>
+                      {c.location && <span className="ag-candidate-email">{c.location}</span>}
+                    </td>
+                    <td className="ag-td-muted">{c.current_title || '—'}</td>
+                    <td className="ag-td-muted">{c.current_company || '—'}</td>
+                    <td className="ag-td-muted">{c.experience_years != null ? `${c.experience_years} yr` : '—'}</td>
+                    <td>
+                      <span className="jd-score-badge" style={{ background: sc2.bg, color: sc2.color, border: `1px solid ${sc2.border}` }}>
+                        {c.match_score}%
+                      </span>
+                    </td>
+                    <td>
+                      <div className="ag-skill-preview">
+                        {c.matched_required.slice(0, 4).map(s => (
+                          <span key={s} className="skill-chip skill-chip--matched">{s}</span>
+                        ))}
+                        {c.matched_required.length > 4 && (
+                          <span className="ag-skill-more">+{c.matched_required.length - 4}</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main jobs module ─────────────────────────────────────────────────────────
 export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout, onBack }) {
   const [jobs,        setJobs]        = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [statusFilter,setStatusFilter]= useState('all');
   const [search,      setSearch]      = useState('');
-  const [view,        setView]        = useState('list'); // 'list' | 'form'
+  const [view,        setView]        = useState('list'); // 'list' | 'form' | 'detail'
   const [editJob,     setEditJob]     = useState(null);
+  const [detailJob,   setDetailJob]   = useState(null);
   const [deleteId,      setDeleteId]      = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
@@ -535,16 +798,40 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
   };
 
   const openCreate = () => { setEditJob(null); setView('form'); };
-  const openEdit   = (job) => { setEditJob(job); setView('form'); };
+  const openEdit   = (job) => { setEditJob(job); setDetailJob(null); setView('form'); };
+  const openDetail = (job) => { setDetailJob(job); setView('detail'); };
 
   const handleQualified = (jobId) =>
     setJobs(prev => prev.map(j => j.id === jobId ? { ...j, is_qualified: true } : j));
 
+  // ── Detail view ──
+  if (view === 'detail' && detailJob) {
+    return (
+      <div className="page-content page-content--wide">
+        <div className="ag-module-body">
+          <JobDetail
+            job={detailJob}
+            authFetch={authFetch}
+            onBack={() => setView('list')}
+            onEdit={openEdit}
+            onDelete={(id) => { setDeleteId(id); setView('list'); }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   // ── Form view ──
   if (view === 'form') {
     return (
-      <div className="page-content">
+      <div className="page-content page-content--wide">
         <div className="ag-module-body">
+          <div className="ag-page-header">
+            <div>
+              <h1 className="ag-page-title">Job Management</h1>
+              <p className="ag-page-subtitle">{editJob ? 'Edit job' : 'Create new job'}</p>
+            </div>
+          </div>
           <JobForm
             job={editJob}
             authFetch={authFetch}
@@ -558,8 +845,15 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
 
   // ── List view ──
   return (
-    <div className="page-content">
+    <div className="page-content page-content--wide">
       <div className="ag-module-body">
+        {/* Page header */}
+        <div className="ag-page-header">
+          <div>
+            <h1 className="ag-page-title">Job Management</h1>
+            <p className="ag-page-subtitle">Manage open positions and client requirements</p>
+          </div>
+        </div>
         {/* Toolbar */}
         <div className="ag-toolbar">
           <div className="ag-status-tabs">
@@ -613,7 +907,7 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
                   return (
                     <tr key={job.id}>
                       <td className="ag-td-title">
-                        <span className="ag-job-title">{job.title}</span>
+                        <button className="ag-job-title ag-job-title--link" onClick={() => openDetail(job)}>{job.title}</button>
                         {job.department && <span className="ag-job-dept">{job.department}</span>}
                         {job.is_qualified && <span className="ag-qualified-badge">✓ Qualified</span>}
                       </td>
