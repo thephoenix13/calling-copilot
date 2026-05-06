@@ -382,6 +382,10 @@ try {
 // Add qualification_qa column to jobs
 try { db.exec('ALTER TABLE jobs ADD COLUMN qualification_qa TEXT'); } catch (_) {}
 
+// Add job_id column to jd_enhancements so standalone enhancer can link to a DB job
+try { db.exec('ALTER TABLE jd_enhancements ADD COLUMN job_id INTEGER REFERENCES jobs(id)'); } catch (_) {}
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_jde_job ON jd_enhancements(job_id)'); } catch (_) {}
+
 // Migration: candidate interaction columns on pofu_emails
 try { db.exec('ALTER TABLE pofu_emails ADD COLUMN response_token TEXT'); } catch (_) {}
 try { db.exec('ALTER TABLE pofu_emails ADD COLUMN response_options TEXT'); } catch (_) {}

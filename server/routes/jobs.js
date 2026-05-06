@@ -316,10 +316,10 @@ router.get('/:id/matched-candidates', (req, res) => {
 
 // GET /jobs/:id/enhancement — most recent saved JD Enhancer assets for this job
 router.get('/:id/enhancement', (req, res) => {
-  const job = db.prepare('SELECT id FROM jobs WHERE id = ?').get(req.params.id);
+  const job = db.prepare('SELECT id, title FROM jobs WHERE id = ?').get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Job not found.' });
 
-  // Look up the most recent pipeline session for this job that has enhancement assets
+  // 1. Pipeline session enhancement (most reliable — has explicit job_id)
   const session = db.prepare(`
     SELECT enhancement_data, updated_at
     FROM sessions
@@ -328,12 +328,43 @@ router.get('/:id/enhancement', (req, res) => {
     LIMIT 1
   `).get(req.params.id);
 
-  if (!session) return res.json({ enhancement: null });
+  if (session?.enhancement_data) {
+    let enhancement = null;
+    try { enhancement = JSON.parse(session.enhancement_data); } catch (_) {}
+    if (enhancement) return res.json({ enhancement, source: 'session', generated_at: session.updated_at });
+  }
 
-  let enhancement = null;
-  try { enhancement = JSON.parse(session.enhancement_data); } catch (_) {}
+  // 2. Standalone JD Enhancer save linked by job_id
+  const jdeById = db.prepare(`
+    SELECT results, updated_at
+    FROM jd_enhancements
+    WHERE job_id = ?
+    ORDER BY updated_at DESC
+    LIMIT 1
+  `).get(req.params.id);
 
-  res.json({ enhancement, generated_at: session.updated_at });
+  if (jdeById?.results) {
+    let enhancement = null;
+    try { enhancement = JSON.parse(jdeById.results); } catch (_) {}
+    if (enhancement) return res.json({ enhancement, source: 'jde', generated_at: jdeById.updated_at });
+  }
+
+  // 3. Fallback: match by title (for enhancements saved before job_id tracking was added)
+  const jdeByTitle = db.prepare(`
+    SELECT results, updated_at
+    FROM jd_enhancements
+    WHERE LOWER(title) = LOWER(?)
+    ORDER BY updated_at DESC
+    LIMIT 1
+  `).get(job.title);
+
+  if (jdeByTitle?.results) {
+    let enhancement = null;
+    try { enhancement = JSON.parse(jdeByTitle.results); } catch (_) {}
+    if (enhancement) return res.json({ enhancement, source: 'jde_title', generated_at: jdeByTitle.updated_at });
+  }
+
+  res.json({ enhancement: null });
 });
 
 // DELETE /jobs/:id

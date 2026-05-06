@@ -330,6 +330,7 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
           jdInput: jdText,
           clientNotes: clientNotes || undefined,
           results,
+          job_id: selectedJobId ? Number(selectedJobId) : undefined,
         }),
       });
       const data = await res.json();
@@ -489,8 +490,12 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
   const handleQualifyAndRefresh = useCallback(async () => {
     if (!parsedJob) return;
     setQualifying(true);
+    setView('loading');
+    setLoadingStep(0);
 
-    // Build Q&A notes from explicitly saved responses
+    const timer = setInterval(() => setLoadingStep(s => Math.min(s + 1, LOADING_STEPS.length - 1)), 7000);
+
+    // Build Q&A notes from all saved responses
     const parsed = tryParse(results.clarificationQuestions);
     const qaLines = [];
     if (parsed) {
@@ -521,18 +526,39 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
       });
       if (!res.ok) throw new Error('Refresh failed.');
       const data = await res.json();
+
+      // Bake saved responses back into the regenerated clarification questions
+      // so answers are preserved in the display after refresh
+      const newCQ = tryParse(data.clarificationQuestions);
+      if (newCQ && typeof newCQ === 'object') {
+        Object.keys(newCQ).forEach(key => {
+          if (Array.isArray(newCQ[key])) {
+            newCQ[key] = newCQ[key].map((q, i) => ({
+              ...q,
+              response: clarSavedResponses[key]?.[i]?.trim() || q.response || '',
+            }));
+          }
+        });
+        data.clarificationQuestions = newCQ;
+      }
+
       setResults(r => ({ ...r, ...data }));
       setQualified(true);
-      // If a DB job was selected, mark it as qualified
+
       if (selectedJobId) {
-        await authFetch(`${BACKEND_URL}/jobs/${selectedJobId}/qualify`, { method: 'PATCH' }).catch(() => {});
+        authFetch(`${BACKEND_URL}/jobs/${selectedJobId}/qualify`, { method: 'PATCH' }).catch(() => {});
       }
+
+      setView('results');
+      setActiveTab('jd'); // land on Formatted JD to show the refreshed output
     } catch (err) {
       console.error('qualify error:', err);
+      setView('results');
     } finally {
+      clearInterval(timer);
       setQualifying(false);
     }
-  }, [parsedJob, clientNotes, companyScript, results.clarificationQuestions, clarResponses, selectedJobId, authFetch]);
+  }, [parsedJob, clientNotes, companyScript, results.clarificationQuestions, clarSavedResponses, selectedJobId, authFetch]);
 
   // ── Derived ────────────────────────────────────────────────────────────
   const activeTabObj    = TABS.find(t => t.key === activeTab);
@@ -559,7 +585,7 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
                 />
               ))}
             </div>
-            <p className="jde-loading-hint">AI is generating 5 recruitment assets — usually 40–60 seconds.</p>
+            <p className="jde-loading-hint">{qualifying ? 'Refreshing all assets with qualification responses — usually 40–60 seconds.' : 'AI is generating 5 recruitment assets — usually 40–60 seconds.'}</p>
           </div>
         </div>
       )}
@@ -569,6 +595,7 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
         <div className="jde-results-page">
           {/* Action bar */}
           <div className="jde-action-bar">
+            <button className="ag-btn ag-btn--ghost" onClick={handleNew}>← New Enhancement</button>
             <button className="ag-btn ag-btn--ghost" onClick={loadSavedList}>📂 Saved</button>
             <div className="jde-save-row">
               <input
@@ -764,140 +791,174 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
       {/* ── Input view ───────────────────────────────────────────────── */}
       {view === 'input' && (
         <div className="jde-input-page">
+          <div className="ag-page-header" style={{ marginBottom: 24 }}>
+            <div>
+              <h1 className="ag-page-title">JD Enhancer</h1>
+              <p className="ag-page-subtitle">Transform a raw job brief into a complete recruitment asset kit in one click.</p>
+            </div>
+          </div>
+
           {loadingError && (
             <div className="jde-error-banner">⚠ {loadingError}</div>
           )}
 
-          <div className="jde-input-card">
-            <div className="jde-input-header">
-              <h2 className="jde-input-title">Generate Recruitment Assets</h2>
-              <p className="jde-input-subtitle">
-                Paste a job description or upload a file — Claude will generate a formatted JD, recruiter brief, clarification questions, reachout messages, and sourcing keywords.
-              </p>
-            </div>
-
-            {/* JD field */}
-            <div className="jde-field">
-              <label className="jde-label">Job Description</label>
-
-              {/* Quick-fill row */}
-              <div className="jde-quickfill">
-                {/* Select from Jobs */}
-                <div className="jde-quickfill-item">
-                  <span className="jde-quickfill-label">Select job</span>
-                  <select
-                    className="ag-input jde-job-select"
-                    value={selectedJobId}
-                    onChange={handleJobSelect}
-                  >
-                    <option value="">— choose from Job Management —</option>
-                    {jobs.map(j => (
-                      <option key={j.id} value={j.id}>
-                        {j.title}{j.client_name ? ` · ${j.client_name}` : ''}
-                      </option>
-                    ))}
-                  </select>
+          <div className="jde-input-cols">
+            {/* ── Left: main JD input ─────────────────────────────────── */}
+            <div className="jde-input-main">
+              <div className="jde-input-card">
+                <div className="jde-input-header">
+                  <h2 className="jde-input-title">Generate Recruitment Assets</h2>
+                  <p className="jde-input-subtitle">
+                    Paste a job description or upload a file — Claude will generate a formatted JD, recruiter brief, clarification questions, reachout messages, and sourcing keywords.
+                  </p>
                 </div>
 
-                <span className="jde-quickfill-or">or</span>
+                {/* JD field */}
+                <div className="jde-field">
+                  <label className="jde-label">Job Description</label>
 
-                {/* File upload */}
-                <div className="jde-quickfill-item">
-                  <span className="jde-quickfill-label">Upload file</span>
-                  <button
-                    className="ag-btn ag-btn--ghost ag-btn--sm jde-upload-btn"
-                    onClick={() => fileRef.current?.click()}
-                    disabled={extracting}
-                  >
-                    {extracting ? '⟳ Extracting…' : '↑ PDF / DOCX / TXT'}
-                  </button>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept=".pdf,.docx,.txt"
-                    style={{ display: 'none' }}
-                    onChange={handleFile}
+                  {/* Quick-fill row */}
+                  <div className="jde-quickfill">
+                    <div className="jde-quickfill-item">
+                      <span className="jde-quickfill-label">Select job</span>
+                      <select
+                        className="ag-input jde-job-select"
+                        value={selectedJobId}
+                        onChange={handleJobSelect}
+                      >
+                        <option value="">— choose from Job Management —</option>
+                        {jobs.map(j => (
+                          <option key={j.id} value={j.id}>
+                            {j.title}{j.client_name ? ` · ${j.client_name}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <span className="jde-quickfill-or">or</span>
+
+                    <div className="jde-quickfill-item">
+                      <span className="jde-quickfill-label">Upload file</span>
+                      <button
+                        className="ag-btn ag-btn--ghost ag-btn--sm jde-upload-btn"
+                        onClick={() => fileRef.current?.click()}
+                        disabled={extracting}
+                      >
+                        {extracting ? '⟳ Extracting…' : '↑ PDF / DOCX / TXT'}
+                      </button>
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept=".pdf,.docx,.txt"
+                        style={{ display: 'none' }}
+                        onChange={handleFile}
+                      />
+                    </div>
+
+                    <span className="jde-quickfill-or">or</span>
+                    <span className="jde-quickfill-label" style={{ alignSelf: 'center' }}>paste below</span>
+
+                    {jdText && (
+                      <button
+                        className="ag-btn ag-btn--ghost ag-btn--sm"
+                        style={{ marginLeft: 'auto' }}
+                        onClick={() => { setJdText(''); setSelectedJobId(''); }}
+                      >
+                        ✕ Clear
+                      </button>
+                    )}
+                  </div>
+
+                  <textarea
+                    className="ag-textarea jde-jd-textarea"
+                    value={jdText}
+                    onChange={e => { setJdText(e.target.value); setSelectedJobId(''); }}
+                    placeholder="Paste the full job description here, select a job above, or upload a file…"
+                    rows={14}
                   />
                 </div>
 
-                <span className="jde-quickfill-or">or</span>
-
-                <span className="jde-quickfill-label" style={{ alignSelf: 'center' }}>paste below</span>
-
-                {jdText && (
+                {/* Actions */}
+                <div className="jde-input-actions">
                   <button
-                    className="ag-btn ag-btn--ghost ag-btn--sm"
-                    style={{ marginLeft: 'auto' }}
-                    onClick={() => { setJdText(''); setSelectedJobId(''); }}
+                    className="ag-btn ag-btn--primary jde-generate-btn"
+                    onClick={handleGenerate}
+                    disabled={!jdText.trim()}
                   >
-                    ✕ Clear
+                    ✨ Generate All Assets
                   </button>
-                )}
+                  <button className="ag-btn ag-btn--ghost" onClick={loadSavedList}>
+                    📂 Load Saved
+                  </button>
+                </div>
               </div>
-
-              <textarea
-                className="ag-textarea jde-jd-textarea"
-                value={jdText}
-                onChange={e => { setJdText(e.target.value); setSelectedJobId(''); }}
-                placeholder="Paste the full job description here, select a job above, or upload a file…"
-                rows={12}
-              />
             </div>
 
-            {/* Client notes */}
-            <div className="jde-field">
-              <label className="jde-label">
-                Client Notes <span className="jde-label-hint">(optional — highlighted in output)</span>
-              </label>
-              <textarea
-                className="ag-textarea"
-                value={clientNotes}
-                onChange={e => setClientNotes(e.target.value)}
-                placeholder="Any notes from the client, e.g., 'Must have WordPress experience' or 'Remote-first, no relocation'…"
-                rows={3}
-              />
-            </div>
-
-            {/* Company script collapsible */}
-            <div className="jde-script-section">
-              <button
-                className="jde-script-toggle"
-                onClick={() => setShowScript(s => !s)}
-              >
-                <span className="jde-script-arrow">{showScript ? '▼' : '▶'}</span>
-                Company Intro Script
-                {companyScript
-                  ? <span className="jde-script-badge jde-script-badge--set">set</span>
-                  : <span className="jde-script-badge">not set</span>}
-              </button>
-              {showScript && (
-                <div className="jde-script-body">
-                  <p className="jde-script-hint">
-                    Used verbatim in WhatsApp/LinkedIn messages and the call pitch. Saved to your browser across sessions.
-                  </p>
+            {/* ── Right: options sidebar ───────────────────────────────── */}
+            <div className="jde-input-sidebar-col">
+              <div className="jde-sidebar-card">
+                <div className="jde-sidebar-label">Client Notes</div>
+                <div className="jde-field">
+                  <label className="jde-label" style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 400 }}>
+                    Optional — highlighted in generated output
+                  </label>
                   <textarea
                     className="ag-textarea"
-                    value={companyScript}
-                    onChange={e => setCompanyScript(e.target.value)}
-                    placeholder="e.g., 'Hi, I'm reaching out from RecruiterOS, a recruitment firm specialising in tech and product roles across India…'"
-                    rows={4}
+                    value={clientNotes}
+                    onChange={e => setClientNotes(e.target.value)}
+                    placeholder="Any notes from the client, e.g., 'Must have WordPress experience' or 'Remote-first, no relocation'…"
+                    rows={5}
                   />
                 </div>
-              )}
-            </div>
 
-            {/* Actions */}
-            <div className="jde-input-actions">
-              <button
-                className="ag-btn ag-btn--primary jde-generate-btn"
-                onClick={handleGenerate}
-                disabled={!jdText.trim()}
-              >
-                ✨ Generate All Assets
-              </button>
-              <button className="ag-btn ag-btn--ghost" onClick={loadSavedList}>
-                📂 Load Saved
-              </button>
+                {/* Company script collapsible */}
+                <div className="jde-script-section">
+                  <button
+                    className="jde-script-toggle"
+                    onClick={() => setShowScript(s => !s)}
+                  >
+                    <span className="jde-script-arrow">{showScript ? '▼' : '▶'}</span>
+                    Company Intro Script
+                    {companyScript
+                      ? <span className="jde-script-badge jde-script-badge--set">set</span>
+                      : <span className="jde-script-badge">not set</span>}
+                  </button>
+                  {showScript && (
+                    <div className="jde-script-body">
+                      <p className="jde-script-hint">
+                        Used verbatim in WhatsApp/LinkedIn messages and the call pitch. Saved across sessions.
+                      </p>
+                      <textarea
+                        className="ag-textarea"
+                        value={companyScript}
+                        onChange={e => setCompanyScript(e.target.value)}
+                        placeholder="e.g., 'Hi, I'm reaching out from Zeople, a recruitment firm specialising in tech and product roles across India…'"
+                        rows={4}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="jde-sidebar-card" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                <div className="jde-sidebar-label">What you'll get</div>
+                {[
+                  ['Formatted JD', 'Polished job description with structured sections'],
+                  ['Recruiter Brief', 'Internal brief with must-haves, red flags, and pitch'],
+                  ['Clarifications', 'Questions to qualify with the hiring manager'],
+                  ['Reachout Material', 'Email, LinkedIn, and WhatsApp templates'],
+                  ['Sourcing Keywords', 'Boolean strings and keyword sets for search'],
+                  ['Market Intel', 'Salary benchmarks and talent market insights'],
+                ].map(([title, desc]) => (
+                  <div key={title} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <span style={{ color: 'var(--accent)', fontSize: 14, marginTop: 1, flexShrink: 0 }}>✓</span>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{title}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>{desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 

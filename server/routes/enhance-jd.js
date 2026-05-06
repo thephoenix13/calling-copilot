@@ -409,21 +409,23 @@ router.get('/saved', (req, res) => {
 
 // POST /saved — upsert
 router.post('/saved', (req, res) => {
-  const { id, title, jdInput, clientNotes, results } = req.body;
+  const { id, title, jdInput, clientNotes, results, job_id } = req.body;
   if (!results) return res.status(400).json({ error: 'results required.' });
+
+  const jobIdVal = job_id ? Number(job_id) : null;
 
   if (id) {
     const existing = db.prepare('SELECT id FROM jd_enhancements WHERE id = ? AND user_id = ?').get(id, req.user.id);
     if (!existing) return res.status(404).json({ error: 'Not found.' });
-    db.prepare('UPDATE jd_enhancements SET title=?, jd_input=?, client_notes=?, results=? WHERE id=?')
-      .run(title || 'Untitled', jdInput || '', clientNotes || null, JSON.stringify(results), id);
+    db.prepare('UPDATE jd_enhancements SET title=?, jd_input=?, client_notes=?, results=?, job_id=? WHERE id=?')
+      .run(title || 'Untitled', jdInput || '', clientNotes || null, JSON.stringify(results), jobIdVal, id);
     return res.json({ id });
   }
 
   const row = db.prepare(`
-    INSERT INTO jd_enhancements (user_id, title, jd_input, client_notes, results)
-    VALUES (?,?,?,?,?)
-  `).run(req.user.id, title || 'Untitled', jdInput || '', clientNotes || null, JSON.stringify(results));
+    INSERT INTO jd_enhancements (user_id, title, jd_input, client_notes, results, job_id)
+    VALUES (?,?,?,?,?,?)
+  `).run(req.user.id, title || 'Untitled', jdInput || '', clientNotes || null, JSON.stringify(results), jobIdVal);
   res.status(201).json({ id: row.lastInsertRowid });
 });
 
