@@ -7,7 +7,8 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { createClient } = require('@deepgram/sdk');
 const { db }    = require('../db');
 const auth      = require('../middleware/auth');
-const { sendEmail } = require('../utils/mailer');
+const { sendEmail }       = require('../utils/mailer');
+const { buildInviteEmail } = require('../utils/emailTemplates');
 
 const anthropic      = new Anthropic();
 const deepgramClient = createClient(process.env.DEEPGRAM_API_KEY);
@@ -411,7 +412,7 @@ router.post('/interviews/:id/invite', async (req, res) => {
   </p>
   ${iv.expiry_date ? `<p style="color:#f87171;font-size:13px">This interview expires on ${new Date(iv.expiry_date).toLocaleDateString()}.</p>` : ''}
   <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-  <p style="color:#9ca3af;font-size:12px">Powered by RecruiterOS</p>
+  <p style="color:#9ca3af;font-size:12px">Powered by Zeople | RecruiterOS</p>
 </div>`;
 
     await sendEmail({
@@ -465,14 +466,30 @@ router.post('/candidates/:cid/evaluate', async (req, res) => {
     ORDER BY viq.order_number, vr.id
   `).all(req.params.cid);
 
-  const missing = responses.filter(r => !r.transcription);
-  if (missing.length > 0) {
-    return res.status(400).json({
-      error: `${missing.length} response(s) are still being transcribed. Please try again in a moment.`,
-    });
-  }
   if (responses.length === 0) {
     return res.status(400).json({ error: 'No responses found for this candidate.' });
+  }
+
+  // Auto-transcribe any responses that haven't been transcribed yet
+  const missing = responses.filter(r => !r.transcription);
+  if (missing.length > 0) {
+    console.log(`[VI] Transcribing ${missing.length} pending response(s) for candidate ${vc.id}`);
+    for (const r of missing) {
+      if (!r.video_filename) continue;
+      const filePath = path.join(VI_DIR, String(vc.id), r.video_filename);
+      if (!fs.existsSync(filePath)) continue;
+      try {
+        const transcription = await transcribeFile(filePath);
+        db.prepare('UPDATE video_responses SET transcription=? WHERE id=?').run(transcription, r.id);
+        r.transcription = transcription;
+      } catch (err) {
+        console.error(`[VI] Transcription failed for response ${r.id}:`, err.message);
+      }
+    }
+    const stillMissing = responses.filter(r => !r.transcription);
+    if (stillMissing.length > 0) {
+      return res.status(400).json({ error: `Could not transcribe ${stillMissing.length} response(s). Please ensure video files are available and try again.` });
+    }
   }
 
   try {
@@ -671,7 +688,12 @@ router.post('/sessions/:sessionId/bulk-invite', async (req, res) => {
     return res.status(400).json({ error: 'interview_id and sc_ids[] required.' });
   }
 
-  const session = db.prepare('SELECT id FROM sessions WHERE id=? AND user_id=?').get(req.params.sessionId, req.user.id);
+  const session = db.prepare(`
+    SELECT s.id, j.title AS job_title
+    FROM sessions s
+    LEFT JOIN jobs j ON j.id = s.job_id
+    WHERE s.id=? AND s.user_id=?
+  `).get(req.params.sessionId, req.user.id);
   if (!session) return res.status(404).json({ error: 'Session not found.' });
 
   const iv = db.prepare('SELECT * FROM video_interviews WHERE id=? AND user_id=?').get(interview_id, req.user.id);
@@ -679,8 +701,10 @@ router.post('/sessions/:sessionId/bulk-invite', async (req, res) => {
 
   db.prepare("UPDATE sessions SET vi_interview_id=?, updated_at=datetime('now') WHERE id=?").run(interview_id, req.params.sessionId);
 
-  const questionCount = db.prepare('SELECT COUNT(*) AS c FROM video_interview_questions WHERE interview_id=?').get(iv.id)?.c || 0;
-  const totalMinutes  = db.prepare('SELECT COALESCE(SUM(estimated_time_minutes),0) AS s FROM video_interview_questions WHERE interview_id=?').get(iv.id)?.s || 0;
+  const questionCount  = db.prepare('SELECT COUNT(*) AS c FROM video_interview_questions WHERE interview_id=?').get(iv.id)?.c || 0;
+  const totalMinutes   = db.prepare('SELECT COALESCE(SUM(estimated_time_minutes),0) AS s FROM video_interview_questions WHERE interview_id=?').get(iv.id)?.s || 0;
+  const recruiterRow   = db.prepare('SELECT display_name FROM users WHERE id=?').get(req.user.id);
+  const recruiterName  = recruiterRow?.display_name || 'Your Recruiter';
 
   const results = [];
 
@@ -712,25 +736,26 @@ router.post('/sessions/:sessionId/bulk-invite', async (req, res) => {
     const link = `${clientUrl()}/interview?code=${code}`;
 
     try {
-      const html = `
-<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
-  <h2 style="color:#7c3aed">You're invited to interview!</h2>
-  <p>Hi ${sc.candidate_name},</p>
-  <p>You have been shortlisted and invited to complete a video interview for:</p>
-  <div style="background:#f3f4f6;padding:16px;border-radius:8px;margin:16px 0">
-    <strong>${iv.title}</strong>
-  </div>
-  <p>This interview has <strong>${questionCount} question${questionCount !== 1 ? 's' : ''}</strong> and will take approximately <strong>${totalMinutes} minute${totalMinutes !== 1 ? 's' : ''}</strong>.</p>
-  <a href="${link}" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:8px 0">
-    Start Interview →
-  </a>
-  <p style="color:#6b7280;font-size:13px;margin-top:16px">Or copy this link: <a href="${link}">${link}</a></p>
-  <p style="color:#6b7280;font-size:13px">Your access code: <strong style="font-family:monospace;font-size:15px;letter-spacing:2px">${code}</strong></p>
-  ${iv.expiry_date ? `<p style="color:#f87171;font-size:13px">This interview expires on ${new Date(iv.expiry_date).toLocaleDateString()}.</p>` : ''}
-  <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>
-  <p style="color:#9ca3af;font-size:12px">Powered by RecruiterOS</p>
-</div>`;
-      await sendEmail({ to: sc.candidate_email, subject: `Video Interview Invitation: ${iv.title}`, html });
+      const extraInfo = [
+        `🎥&nbsp; <strong>Questions:</strong> ${questionCount} question${questionCount !== 1 ? 's' : ''} (~${totalMinutes} min)`,
+        `🔑&nbsp; <strong>Access code:</strong> <span style="font-family:monospace;letter-spacing:2px;">${code}</span>`,
+        ...(iv.expiry_date ? [`⚠️&nbsp; <strong>Expires:</strong> ${new Date(iv.expiry_date).toLocaleDateString()}`] : []),
+      ];
+      const html = buildInviteEmail({
+        candidateName:  sc.candidate_name,
+        recruiterName,
+        assessmentType: 'Video Interview',
+        jobTitle:       session.job_title || '',
+        timeLimitMin:   totalMinutes || questionCount * 3,
+        passScore:      null,
+        link,
+        ctaLabel:       'Start Interview',
+        extraInfo,
+      });
+      const subject = session.job_title
+        ? `Next step from our conversation — Video Interview (${session.job_title})`
+        : `Next step from our conversation — ${iv.title}`;
+      await sendEmail({ to: sc.candidate_email, subject, html });
     } catch (emailErr) {
       console.error('[VI] Email failed:', emailErr.message);
     }

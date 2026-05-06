@@ -4,7 +4,8 @@ const crypto    = require('crypto');
 const Anthropic = require('@anthropic-ai/sdk');
 const { db }    = require('../db');
 const auth      = require('../middleware/auth');
-const { sendEmail } = require('../utils/mailer');
+const { sendEmail }       = require('../utils/mailer');
+const { buildInviteEmail } = require('../utils/emailTemplates');
 
 const anthropic = new Anthropic();
 
@@ -387,7 +388,7 @@ router.post('/:id/invite', (req, res) => {
   const assessment = db.prepare('SELECT * FROM coding_assessments WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!assessment) return res.status(404).json({ error: 'Not found.' });
 
-  const { candidates } = req.body;
+  const { candidates, job_title } = req.body;
   if (!Array.isArray(candidates) || candidates.length === 0) return res.status(400).json({ error: 'candidates array required.' });
 
   const insert = db.prepare(`INSERT INTO coding_invites (assessment_id, candidate_id, candidate_name, candidate_email, token) VALUES (?, ?, ?, ?, ?)`);
@@ -406,29 +407,26 @@ router.post('/:id/invite', (req, res) => {
   res.status(201).json({ invites });
 
   // Send invite emails in background — don't block the response
+  const recruiter = db.prepare('SELECT display_name FROM users WHERE id = ?').get(req.user.id);
+  const recruiterName = recruiter?.display_name || 'Your Recruiter';
+
   for (const inv of invites) {
+    const html = buildInviteEmail({
+      candidateName:  inv.candidate_name,
+      recruiterName,
+      assessmentType: 'Coding assessment',
+      jobTitle:       job_title || '',
+      timeLimitMin:   assessment.time_limit_min || 60,
+      passScore:      assessment.pass_score ?? null,
+      link:           inv.link,
+      ctaLabel:       'Start Assessment',
+    });
     sendEmail({
       to:      `"${inv.candidate_name}" <${inv.candidate_email}>`,
-      subject: `You've been invited: ${assessment.title}`,
-      html: `
-<div style="font-family:-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#f8f9fa;">
-  <div style="background:#fff;border-radius:12px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-    <h2 style="margin:0 0 8px;font-size:22px;color:#111;">Hi ${inv.candidate_name},</h2>
-    <p style="color:#555;font-size:15px;line-height:1.6;margin:0 0 24px;">
-      You have been invited to complete a <strong>Coding Assessment</strong>:
-      <strong>${assessment.title}</strong>.
-    </p>
-    <div style="background:#f1f5f9;border-radius:8px;padding:16px 20px;margin-bottom:24px;font-size:13px;color:#555;">
-      ⏱ Time limit: <strong>${assessment.time_limit_min || 60} minutes</strong>
-    </div>
-    <a href="${inv.link}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px;">
-      Start Assessment →
-    </a>
-    <p style="margin:24px 0 0;font-size:12px;color:#999;">
-      This link is personal to you — do not share it. If you did not expect this invitation, please ignore this email.
-    </p>
-  </div>
-</div>`,
+      subject: job_title
+        ? `Next step from our conversation — ${assessment.title} (${job_title})`
+        : `Next step from our conversation — ${assessment.title}`,
+      html,
     }).catch(err => console.error(`[Coding Invite] Email to ${inv.candidate_email} failed:`, err.message));
   }
 });
@@ -443,28 +441,26 @@ router.post('/:id/invites/:inviteId/resend', async (req, res) => {
 
   const link = `${clientUrl()}/coding-assessment?token=${invite.token}`;
   try {
+    const recruiter = db.prepare('SELECT display_name FROM users WHERE id = ?').get(req.user.id);
+    const recruiterName = recruiter?.display_name || 'Your Recruiter';
+    const jobRow = assessment.job_id
+      ? db.prepare('SELECT title FROM jobs WHERE id = ?').get(assessment.job_id)
+      : null;
+    const html = buildInviteEmail({
+      candidateName:  invite.candidate_name,
+      recruiterName,
+      assessmentType: 'Coding assessment',
+      jobTitle:       jobRow?.title || '',
+      timeLimitMin:   assessment.time_limit_min || 60,
+      passScore:      assessment.pass_score ?? null,
+      link,
+      ctaLabel:       'Start Assessment',
+      isReminder:     true,
+    });
     await sendEmail({
       to:      `"${invite.candidate_name}" <${invite.candidate_email}>`,
       subject: `Reminder: ${assessment.title}`,
-      html: `
-<div style="font-family:-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#f8f9fa;">
-  <div style="background:#fff;border-radius:12px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-    <h2 style="margin:0 0 8px;font-size:22px;color:#111;">Hi ${invite.candidate_name},</h2>
-    <p style="color:#555;font-size:15px;line-height:1.6;margin:0 0 24px;">
-      This is a reminder that you have been invited to complete a <strong>Coding Assessment</strong>:
-      <strong>${assessment.title}</strong>.
-    </p>
-    <div style="background:#f1f5f9;border-radius:8px;padding:16px 20px;margin-bottom:24px;font-size:13px;color:#555;">
-      ⏱ Time limit: <strong>${assessment.time_limit_min || 60} minutes</strong>
-    </div>
-    <a href="${link}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px;">
-      Start Assessment →
-    </a>
-    <p style="margin:24px 0 0;font-size:12px;color:#999;">
-      This link is personal to you — do not share it. If you did not expect this invitation, please ignore this email.
-    </p>
-  </div>
-</div>`,
+      html,
     });
     res.json({ ok: true });
   } catch (err) {

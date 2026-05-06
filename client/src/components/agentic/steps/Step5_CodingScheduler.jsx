@@ -47,7 +47,10 @@ export default function Step5_CodingScheduler({ session, authFetch, onComplete, 
       const res  = await authFetch(`${BACKEND_URL}/coding-assessments/${selectedId}/invite`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ candidates: candidatesToInvite }),
+        body:    JSON.stringify({
+          candidates: candidatesToInvite,
+          job_title:  session.job?.title || '',
+        }),
       });
       const data = await res.json();
       const results = {};
