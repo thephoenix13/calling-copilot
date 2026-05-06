@@ -159,7 +159,7 @@ export default function AppShell({ children, currentView, onNavigate, isLight, o
       <aside className="sidebar">
         {/* Logo */}
         <div className="sidebar-logo">
-          <div className="sidebar-logo-mark">Z</div>
+          <img src="/zeople-logo.png" alt="Zeople" className="sidebar-logo-mark" />
           <div className="sidebar-logo-text">
             <span className="sidebar-product">Zeople</span>
             <span className="sidebar-tagline">RecruiterOS</span>
