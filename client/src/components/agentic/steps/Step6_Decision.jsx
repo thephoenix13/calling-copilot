@@ -4,6 +4,18 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
 const LEVELS = ['L1', 'L2', 'L3'];
 
+function toLocalInput(dt) {
+  if (!dt) return '';
+  return dt.replace(' ', 'T').slice(0, 16);
+}
+
+function fmtDateTime(dt) {
+  if (!dt) return '';
+  const d = new Date(dt.replace ? dt.replace(' ', 'T') : dt);
+  if (isNaN(d)) return dt;
+  return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 export default function Step6_Decision({ session, authFetch, onComplete, onRefresh }) {
   const [saving, setSaving]   = useState({});
   const [local, setLocal]     = useState({});
@@ -11,7 +23,7 @@ export default function Step6_Decision({ session, authFetch, onComplete, onRefre
   const scored = (session.candidates || []).filter(c => c.ai_interview_score != null);
   const proceedCount = scored.filter(c => c.decision === 'proceed').length;
 
-  const getVal = (sc, field) => local[sc.id]?.[field] ?? sc[field] ?? '';
+  const getVal = (sc, field) => local[sc.id]?.[field] !== undefined ? local[sc.id][field] : (sc[field] ?? '');
 
   const update = (scId, field, val) => {
     setLocal(l => ({ ...l, [scId]: { ...l[scId], [field]: val } }));
@@ -26,11 +38,15 @@ export default function Step6_Decision({ session, authFetch, onComplete, onRefre
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          decision:        patch.decision        ?? sc.decision,
-          interview_level: patch.interview_level ?? sc.interview_level,
+          decision:                patch.decision                ?? sc.decision,
+          interview_level:         patch.interview_level         ?? sc.interview_level,
+          interview_scheduled_at:  patch.interview_scheduled_at  !== undefined
+                                     ? (patch.interview_scheduled_at || null)
+                                     : sc.interview_scheduled_at,
         }),
       });
       await onRefresh();
+      setLocal(l => { const n = { ...l }; delete n[sc.id]; return n; });
     } catch (err) {
       console.error(err);
     } finally {
@@ -39,9 +55,11 @@ export default function Step6_Decision({ session, authFetch, onComplete, onRefre
   };
 
   const handleNotify = (sc) => {
-    const subject = encodeURIComponent(`Interview Invitation — ${session.job?.title || 'Role'}`);
-    const body    = encodeURIComponent(
-      `Dear ${sc.candidate_name},\n\nWe are pleased to invite you for an ${getVal(sc, 'interview_level') || 'L1'} interview for the ${session.job?.title || 'role'} position.\n\nPlease let us know your availability.\n\nBest regards,\nRecruitment Team`
+    const scheduled = sc.interview_scheduled_at || getVal(sc, 'interview_scheduled_at');
+    const dateInfo  = scheduled ? `\n\nScheduled: ${fmtDateTime(scheduled)}` : '\n\nPlease let us know your availability.';
+    const subject   = encodeURIComponent(`Interview Invitation — ${session.job?.title || 'Role'}`);
+    const body      = encodeURIComponent(
+      `Dear ${sc.candidate_name},\n\nWe are pleased to invite you for an ${getVal(sc, 'interview_level') || sc.interview_level || 'L1'} interview for the ${session.job?.title || 'role'} position.${dateInfo}\n\nBest regards,\nRecruitment Team`
     );
     window.open(`mailto:${sc.candidate_email || ''}?subject=${subject}&body=${body}`);
     authFetch(`${BACKEND_URL}/sessions/${session.id}/candidates/${sc.id}`, {
@@ -59,7 +77,7 @@ export default function Step6_Decision({ session, authFetch, onComplete, onRefre
     <div className="sw-step-page">
       <div className="sw-step-header">
         <h2 className="sw-step-title">Step 6 — Decision</h2>
-        <p className="sw-step-desc">Decide which candidates to move forward. Set Proceed + Interview Level, then optionally notify by email.</p>
+        <p className="sw-step-desc">Decide which candidates to move forward. Set Proceed + Interview Level, schedule the interview slot, then optionally notify by email.</p>
       </div>
 
       <div className="sw-content-card">
@@ -73,9 +91,10 @@ export default function Step6_Decision({ session, authFetch, onComplete, onRefre
         ) : (
           <div className="sw-decision-list">
             {scored.map(sc => {
-              const decision = getVal(sc, 'decision');
-              const level    = getVal(sc, 'interview_level');
-              const isDirty  = local[sc.id] != null;
+              const decision  = getVal(sc, 'decision');
+              const level     = getVal(sc, 'interview_level');
+              const scheduled = getVal(sc, 'interview_scheduled_at');
+              const isDirty   = local[sc.id] != null;
               return (
                 <div key={sc.id} className="sw-decision-row">
                   <div className="sw-decision-info">
@@ -101,19 +120,34 @@ export default function Step6_Decision({ session, authFetch, onComplete, onRefre
                       ))}
                     </div>
 
-                    {/* Level (only when proceed) */}
+                    {/* Level + Schedule (only when proceed) */}
                     {decision === 'proceed' && (
-                      <div className="sw-level-radios">
-                        {LEVELS.map(lv => (
-                          <button
-                            key={lv}
-                            className={`sw-level-btn${level === lv ? ' sw-level-btn--active' : ''}`}
-                            onClick={() => update(sc.id, 'interview_level', lv)}
-                          >
-                            {lv}
-                          </button>
-                        ))}
-                      </div>
+                      <>
+                        <div className="sw-level-radios">
+                          {LEVELS.map(lv => (
+                            <button
+                              key={lv}
+                              className={`sw-level-btn${level === lv ? ' sw-level-btn--active' : ''}`}
+                              onClick={() => update(sc.id, 'interview_level', lv)}
+                            >
+                              {lv}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="sw-schedule-row">
+                          <label className="sw-schedule-label">📅 Interview Date & Time</label>
+                          <input
+                            type="datetime-local"
+                            className="ag-input sw-schedule-input"
+                            value={toLocalInput(scheduled)}
+                            onChange={e => update(sc.id, 'interview_scheduled_at', e.target.value || null)}
+                          />
+                          {sc.interview_scheduled_at && !local[sc.id]?.interview_scheduled_at && (
+                            <span className="sw-schedule-saved">Scheduled: {fmtDateTime(sc.interview_scheduled_at)}</span>
+                          )}
+                        </div>
+                      </>
                     )}
 
                     {/* Actions */}

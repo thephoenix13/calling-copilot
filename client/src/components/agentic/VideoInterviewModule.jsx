@@ -2,6 +2,47 @@ import { useState, useEffect, useRef } from 'react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
+// ── Auth-gated video player ───────────────────────────────────────────────────
+// The /vi/video/:cid/:filename endpoint requires JWT. A plain <video src> won't
+// send auth headers, so we fetch the blob manually and hand a blob URL to the player.
+function AuthVideoPlayer({ src, authFetch }) {
+  const [blobUrl, setBlobUrl] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
+
+  const load = async () => {
+    if (blobUrl || loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await authFetch(src);
+      if (!res.ok) throw new Error('Video not available.');
+      const blob = await res.blob();
+      setBlobUrl(URL.createObjectURL(blob));
+    } catch (err) {
+      setError(err.message || 'Failed to load video.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => () => { if (blobUrl) URL.revokeObjectURL(blobUrl); }, [blobUrl]);
+
+  if (error) return <div className="vi-avp-error">⚠ {error}</div>;
+
+  if (!blobUrl) {
+    return (
+      <button className="vi-avp-load" onClick={load} disabled={loading}>
+        {loading ? <><span className="spinner" style={{ marginRight: 6 }} />Loading video…</> : '▶ Watch Recording'}
+      </button>
+    );
+  }
+
+  return (
+    <video className="vi-avp-video" src={blobUrl} controls playsInline autoPlay />
+  );
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const statusColors = {
   invited:    { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)' },
@@ -284,10 +325,12 @@ function QuestionRow({ q, idx, interviewId, authFetch, onUpdated }) {
 
 // ── Evaluation Report View ────────────────────────────────────────────────────
 function ReportView({ candidateId, interviewTitle, authFetch, onBack }) {
-  const [report,     setReport]     = useState(null);
-  const [loading,    setLoading]    = useState(true);
-  const [evaluating, setEvaluating] = useState(false);
-  const [evalMsg,    setEvalMsg]    = useState('');
+  const [report,           setReport]           = useState(null);
+  const [loading,          setLoading]          = useState(true);
+  const [evaluating,       setEvaluating]       = useState(false);
+  const [evalMsg,          setEvalMsg]          = useState('');
+  const [responses,        setResponses]        = useState([]);
+  const [responsesLoading, setResponsesLoading] = useState(false);
 
   const loadReport = async () => {
     setLoading(true);
@@ -298,11 +341,20 @@ function ReportView({ candidateId, interviewTitle, authFetch, onBack }) {
     setLoading(false);
   };
 
-  useEffect(() => { loadReport(); }, [candidateId]);
+  const loadResponses = async () => {
+    setResponsesLoading(true);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/vi/candidates/${candidateId}/responses`);
+      if (res.ok) { const data = await res.json(); setResponses(data.responses || []); }
+    } catch (_) {}
+    setResponsesLoading(false);
+  };
+
+  useEffect(() => { loadReport(); loadResponses(); }, [candidateId]);
 
   const triggerEvaluation = async () => {
     setEvaluating(true);
-    setEvalMsg('');
+    setEvalMsg('Transcribing responses and generating AI evaluation…');
     try {
       const res  = await authFetch(`${BACKEND_URL}/vi/candidates/${candidateId}/evaluate`, { method: 'POST' });
       const data = await res.json();
@@ -340,10 +392,61 @@ function ReportView({ candidateId, interviewTitle, authFetch, onBack }) {
 
       {!rec ? (
         <div className="vi-report-noeval">
-          <p>No evaluation yet. Click below to generate an AI evaluation of this candidate's responses.</p>
-          {evalMsg && <div className="vi-cf-error">{evalMsg}</div>}
-          <button className="ag-btn ag-btn--primary" onClick={triggerEvaluation} disabled={evaluating}>
-            {evaluating ? <><span className="spinner" style={{ marginRight: 6 }} />Evaluating…</> : '✨ Generate AI Evaluation'}
+          <h3 className="vi-noeval-title">Recorded Answers</h3>
+          <p className="vi-noeval-sub">Review the candidate's recorded responses below, then run the AI evaluation.</p>
+
+          {responsesLoading ? (
+            <div className="vi-loading" style={{ padding: '20px 0' }}><span className="spinner" /> Loading responses…</div>
+          ) : responses.length === 0 ? (
+            <div className="vi-noeval-empty">No responses recorded yet for this candidate.</div>
+          ) : (
+            <div className="vi-responses-list">
+              {responses.map((r, i) => (
+                <div key={r.id} className="vi-response-card">
+                  <div className="vi-response-card-header">
+                    <span className="vi-response-qnum">Q{i + 1}</span>
+                    <span className="vi-response-qtype">{r.question_type}</span>
+                    {r.transcription
+                      ? <span className="vi-trans-badge vi-trans-badge--ok">✓ Transcribed</span>
+                      : <span className="vi-trans-badge vi-trans-badge--pending">⏳ Pending transcription</span>
+                    }
+                  </div>
+                  <p className="vi-response-qtext">{r.question_text}</p>
+                  {r.video_filename && (
+                    <div className="vi-response-video">
+                      <AuthVideoPlayer
+                        src={`${BACKEND_URL}/vi/video/${r.candidate_id}/${r.video_filename}`}
+                        authFetch={authFetch}
+                      />
+                    </div>
+                  )}
+                  {r.transcription && (
+                    <details className="vi-response-transcript">
+                      <summary>View transcription</summary>
+                      <p>{r.transcription}</p>
+                    </details>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {evalMsg && (
+            <div className={evaluating ? 'vi-eval-progress' : 'vi-cf-error'} style={{ marginTop: 12 }}>
+              {evaluating && <span className="spinner" style={{ marginRight: 8 }} />}
+              {evalMsg}
+            </div>
+          )}
+          <button
+            className="ag-btn ag-btn--primary"
+            onClick={triggerEvaluation}
+            disabled={evaluating || responses.length === 0}
+            style={{ marginTop: 16 }}
+          >
+            {evaluating
+              ? <><span className="spinner" style={{ marginRight: 6 }} />Evaluating in background…</>
+              : '✨ Transcribe and Evaluate'
+            }
           </button>
         </div>
       ) : (
@@ -420,34 +523,48 @@ function ReportView({ candidateId, interviewTitle, authFetch, onBack }) {
           )}
 
           {/* Question evaluations */}
-          {report?.questionEvals?.length > 0 && (
-            <div className="vi-report-section">
-              <h3 className="vi-report-section-title">Question-by-Question Analysis</h3>
-              <div className="vi-qevals">
-                {report.questionEvals.map((qe, i) => (
-                  <div key={qe.id} className="vi-qeval-card">
-                    <div className="vi-qeval-header">
-                      <span className="vi-qeval-num">Q{i + 1}</span>
-                      <span className="vi-qeval-qtext">{qe.question_text}</span>
-                      <span className="vi-qeval-score">{qe.score}/100</span>
-                    </div>
-                    <div className="vi-qeval-subscores">
-                      <span>Relevance: {qe.relevance_score}</span>
-                      <span>Clarity: {qe.clarity_score}</span>
-                      <span>Completeness: {qe.completeness_score}</span>
-                    </div>
-                    {qe.analysis && <p className="vi-qeval-analysis">{qe.analysis}</p>}
-                    {qe.response_transcription && (
-                      <details className="vi-qeval-transcript">
-                        <summary>View transcription</summary>
-                        <p>{qe.response_transcription}</p>
-                      </details>
-                    )}
-                  </div>
-                ))}
+          {report?.questionEvals?.length > 0 && (() => {
+            const responseByQid = Object.fromEntries(responses.map(r => [r.question_id, r]));
+            return (
+              <div className="vi-report-section">
+                <h3 className="vi-report-section-title">Question-by-Question Analysis</h3>
+                <div className="vi-qevals">
+                  {report.questionEvals.map((qe, i) => {
+                    const resp = responseByQid[qe.question_id];
+                    return (
+                      <div key={qe.id} className="vi-qeval-card">
+                        <div className="vi-qeval-header">
+                          <span className="vi-qeval-num">Q{i + 1}</span>
+                          <span className="vi-qeval-qtext">{qe.question_text}</span>
+                          <span className="vi-qeval-score">{qe.score}/100</span>
+                        </div>
+                        <div className="vi-qeval-subscores">
+                          <span>Relevance: {qe.relevance_score}</span>
+                          <span>Clarity: {qe.clarity_score}</span>
+                          <span>Completeness: {qe.completeness_score}</span>
+                        </div>
+                        {resp?.video_filename && (
+                          <div className="vi-qeval-video">
+                            <AuthVideoPlayer
+                              src={`${BACKEND_URL}/vi/video/${candidateId}/${resp.video_filename}`}
+                              authFetch={authFetch}
+                            />
+                          </div>
+                        )}
+                        {qe.analysis && <p className="vi-qeval-analysis">{qe.analysis}</p>}
+                        {qe.response_transcription && (
+                          <details className="vi-qeval-transcript">
+                            <summary>View transcription</summary>
+                            <p>{qe.response_transcription}</p>
+                          </details>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           <div style={{ marginTop: 24 }}>
             {evalMsg && <div className="vi-cf-error">{evalMsg}</div>}

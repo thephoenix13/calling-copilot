@@ -90,74 +90,94 @@ export default function POFUModule({ authFetch, isLight, onToggleTheme, onLogout
   }
 
   return (
-    <div className="page-content">
+    <div className="page-content page-content--wide">
 
-      <div className="pofu-page">
-        {/* Stats strip */}
-        {stats && (
-          <div className="ag-stats-strip" style={{ marginBottom: 24 }}>
-            <div className="ag-stat-card">
-              <span className="ag-stat-value">{stats.total}</span>
-              <span className="ag-stat-label">In POFU</span>
-            </div>
-            <div className="ag-stat-card">
-              <span className="ag-stat-value" style={{ color: '#ef4444' }}>{stats.atRisk}</span>
-              <span className="ag-stat-label">At Risk</span>
-            </div>
-            <div className="ag-stat-card">
-              <span className="ag-stat-value" style={{ color: '#f59e0b' }}>{stats.medium}</span>
-              <span className="ag-stat-label">Medium Risk</span>
-            </div>
-            <div className="ag-stat-card">
-              <span className="ag-stat-value" style={{ color: '#10b981' }}>{stats.joiningThisWeek}</span>
-              <span className="ag-stat-label">Joining This Week</span>
-            </div>
-            <div className="ag-stat-card">
-              <span className="ag-stat-value">{stats.joined}</span>
-              <span className="ag-stat-label">Joined</span>
-            </div>
-            <div className="ag-stat-card">
-              <span className="ag-stat-value" style={{ color: 'var(--text-3)' }}>{stats.dropped}</span>
-              <span className="ag-stat-label">Dropped</span>
-            </div>
+      <div className="ag-module-body">
+        {/* Page header */}
+        <div className="ag-page-header">
+          <div>
+            <h1 className="ag-page-title">Post-Offer Follow-Up</h1>
+            <p className="ag-page-subtitle">Track offer-stage candidates through notice period, BGV, and joining — with automated email sequences.</p>
           </div>
-        )}
-
-        {/* Action bar */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div className="pofu-section-title">Candidates ({candidates.length})</div>
-          <button className="ag-btn ag-btn--primary" onClick={() => setShowAdd(true)}>+ Add Manually</button>
+          <button className="ag-btn ag-btn--primary" onClick={() => setShowAdd(true)}>+ Add Candidate</button>
         </div>
 
-        {loading ? (
-          <div className="sw-loading">Loading…</div>
-        ) : candidates.length === 0 ? (
-          <div className="ag-empty">No candidates in POFU yet. Add manually or move selected candidates from Pipeline Tracker (Step 7).</div>
-        ) : (
-          <div className="pofu-list">
-            {candidates.map(c => (
-              <div key={c.id} className="pofu-row" onClick={() => setSelected(c.id)}>
-                <div className="pofu-row-main">
-                  <div className="pofu-row-name">{c.candidate_name}</div>
-                  <div className="pofu-row-meta">
-                    {c.role_title && <span>{c.role_title}</span>}
-                    {c.company_name && <span>@ {c.company_name}</span>}
-                    {c.doj && <span>DOJ: {new Date(c.doj).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>}
+        <div className="pofu-page">
+          {/* Stats strip */}
+          {stats && (
+            <div className="ag-stats-strip" style={{ marginBottom: 28 }}>
+              <div className="ag-stat-card">
+                <span className="ag-stat-value">{stats.total}</span>
+                <span className="ag-stat-label">In POFU</span>
+              </div>
+              <div className="ag-stat-card">
+                <span className="ag-stat-value" style={{ color: '#ef4444' }}>{stats.atRisk}</span>
+                <span className="ag-stat-label">High Risk</span>
+              </div>
+              <div className="ag-stat-card">
+                <span className="ag-stat-value" style={{ color: '#f59e0b' }}>{stats.medium}</span>
+                <span className="ag-stat-label">Medium Risk</span>
+              </div>
+              <div className="ag-stat-card">
+                <span className="ag-stat-value" style={{ color: '#10b981' }}>{stats.joiningThisWeek}</span>
+                <span className="ag-stat-label">Joining This Week</span>
+              </div>
+              <div className="ag-stat-card">
+                <span className="ag-stat-value" style={{ color: '#10b981' }}>{stats.joined}</span>
+                <span className="ag-stat-label">Joined</span>
+              </div>
+              <div className="ag-stat-card">
+                <span className="ag-stat-value" style={{ color: 'var(--text-3)' }}>{stats.dropped}</span>
+                <span className="ag-stat-label">Dropped</span>
+              </div>
+            </div>
+          )}
+
+          {/* Candidate count label */}
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+            <div className="pofu-section-title">Candidates ({candidates.length})</div>
+          </div>
+
+          {loading ? (
+            <div className="sw-loading">Loading…</div>
+          ) : candidates.length === 0 ? (
+            <div className="ag-empty">No candidates in POFU yet. Add manually or move selected candidates from Pipeline Tracker (Step 7).</div>
+          ) : (
+            <div className="pofu-list">
+              {candidates.map(c => (
+                <div
+                  key={c.id}
+                  className={`pofu-row pofu-row--risk-${c.risk_level || 'low'}`}
+                  onClick={() => setSelected(c.id)}
+                >
+                  <div className="pofu-row-top">
+                    <div className="pofu-row-main">
+                      <div className="pofu-row-name">{c.candidate_name}</div>
+                      <div className="pofu-row-meta">
+                        {c.role_title && <span>{c.role_title}</span>}
+                        {c.company_name && <span>@ {c.company_name}</span>}
+                      </div>
+                    </div>
+                    <RiskBadge level={c.risk_level} score={c.risk_score} />
+                  </div>
+                  <div className="pofu-row-bottom">
+                    <span className="pofu-state-badge">{STATE_LABELS[c.state] || c.state}</span>
+                    {c.doj && (
+                      <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                        DOJ: {new Date(c.doj).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    )}
+                    {c.last_email_at && (
+                      <span style={{ fontSize: 11, color: 'var(--text-3)', marginLeft: 'auto' }}>
+                        Last email: {new Date(c.last_email_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div className="pofu-row-right">
-                  <span className="pofu-state-badge">{STATE_LABELS[c.state] || c.state}</span>
-                  <RiskBadge level={c.risk_level} score={c.risk_score} />
-                  {c.last_email_at && (
-                    <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                      Last email: {new Date(c.last_email_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Add manually modal */}

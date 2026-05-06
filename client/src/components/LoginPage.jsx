@@ -84,8 +84,9 @@ export default function LoginPage({ onLogin }) {
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-logo">📞</div>
-        <h1 className="login-title">Recruiter Call App</h1>
+        <div className="login-logo">Z</div>
+        <h1 className="login-title">Zeople</h1>
+        <p style={{ fontSize: 12, color: '#64748B', margin: '-4px 0 8px', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>RecruiterOS</p>
 
         {mode !== 'forgot' ? (
           <div className="login-tabs">

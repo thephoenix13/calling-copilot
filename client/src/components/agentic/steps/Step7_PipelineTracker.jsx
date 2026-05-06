@@ -2,6 +2,18 @@ import { useState, useRef, useEffect } from 'react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
+function toLocalInput(dt) {
+  if (!dt) return '';
+  return dt.replace(' ', 'T').slice(0, 16);
+}
+
+function fmtDateTime(dt) {
+  if (!dt) return '';
+  const d = new Date(dt.replace ? dt.replace(' ', 'T') : dt);
+  if (isNaN(d)) return dt;
+  return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 // ── Voice Note Modal ─────────────────────────────────────────────────────────
 function VoiceNoteModal({ candidateName, existingNote, onSave, onClose }) {
   const [transcript, setTranscript] = useState(existingNote || '');
@@ -101,15 +113,16 @@ const COLUMNS = [
 const NEXT_LEVEL = { L1: 'L2', L2: 'L3', L3: 'selected' };
 
 export default function Step7_PipelineTracker({ session, authFetch, onRefresh }) {
-  const [feedback, setFeedback]     = useState({});
-  const [saving, setSaving]         = useState({});
+  const [feedback, setFeedback]         = useState({});
+  const [saving, setSaving]             = useState({});
   const [voiceNoteFor, setVoiceNoteFor] = useState(null);
+  const [scheduleEdit, setScheduleEdit] = useState({}); // scId -> 'datetime-local string' | undefined
 
   // POFU enrollment modal
-  const [pofuModal, setPofuModal] = useState(null); // sc object
-  const [pofuDoj, setPofuDoj]     = useState('');
+  const [pofuModal, setPofuModal]       = useState(null);
+  const [pofuDoj, setPofuDoj]           = useState('');
   const [pofuEnrolling, setPofuEnrolling] = useState(false);
-  const [pofuMsg, setPofuMsg]     = useState('');
+  const [pofuMsg, setPofuMsg]           = useState('');
 
   const proceeded = (session.candidates || []).filter(c => c.decision === 'proceed');
 
@@ -130,7 +143,6 @@ export default function Step7_PipelineTracker({ session, authFetch, onRefresh })
   };
 
   const handleNext = (sc) => {
-    const col = sc.pipeline_status === 'pending' ? sc.interview_level : sc.interview_level;
     const next = NEXT_LEVEL[sc.interview_level];
     if (!next) return;
     if (next === 'selected') {
@@ -142,6 +154,12 @@ export default function Step7_PipelineTracker({ session, authFetch, onRefresh })
 
   const handleHold   = (sc) => save(sc, { pipeline_status: 'hold'   });
   const handleReject = (sc) => save(sc, { pipeline_status: 'reject'  });
+
+  const handleSaveSchedule = async (sc) => {
+    const val = scheduleEdit[sc.id];
+    await save(sc, { interview_scheduled_at: val || null });
+    setScheduleEdit(s => { const n = { ...s }; delete n[sc.id]; return n; });
+  };
 
   const handleEnrollPOFU = async () => {
     if (!pofuModal) return;
@@ -171,6 +189,7 @@ export default function Step7_PipelineTracker({ session, authFetch, onRefresh })
       setPofuEnrolling(false);
     }
   };
+
   const handleFeedbackSave = (sc) => {
     const text = feedback[sc.id] ?? sc.pipeline_feedback ?? '';
     save(sc, { pipeline_feedback: text });
@@ -198,7 +217,7 @@ export default function Step7_PipelineTracker({ session, authFetch, onRefresh })
     <div className="sw-step-page sw-tracker-page">
       <div className="sw-step-header">
         <h2 className="sw-step-title">Step 7 — Pipeline Tracker</h2>
-        <p className="sw-step-desc">Move candidates through interview rounds. Hold, reject, or advance to the next level.</p>
+        <p className="sw-step-desc">Move candidates through interview rounds. Hold, reject, or advance to the next level. Update scheduled interview dates as rounds progress.</p>
       </div>
 
       <div className="sw-kanban">
@@ -223,6 +242,40 @@ export default function Step7_PipelineTracker({ session, authFetch, onRefresh })
                     </div>
 
                     {sc.pipeline_status === 'hold' && <div className="sw-card-hold-tag">⏸ On Hold</div>}
+
+                    {/* Interview schedule */}
+                    <div className="sw-card-schedule-row">
+                      <span className="sw-card-schedule-icon">📅</span>
+                      {scheduleEdit[sc.id] !== undefined ? (
+                        <div className="sw-card-schedule-edit">
+                          <input
+                            type="datetime-local"
+                            className="sw-card-schedule-input"
+                            value={scheduleEdit[sc.id]}
+                            onChange={e => setScheduleEdit(s => ({ ...s, [sc.id]: e.target.value }))}
+                          />
+                          <button
+                            className="sw-card-sched-confirm"
+                            onClick={() => handleSaveSchedule(sc)}
+                            disabled={saving[sc.id]}
+                            title="Save date"
+                          >✓</button>
+                          <button
+                            className="sw-card-sched-cancel"
+                            onClick={() => setScheduleEdit(s => { const n = { ...s }; delete n[sc.id]; return n; })}
+                            title="Cancel"
+                          >✕</button>
+                        </div>
+                      ) : (
+                        <button
+                          className={`sw-card-schedule-val${sc.interview_scheduled_at ? ' sw-card-schedule-val--set' : ''}`}
+                          onClick={() => setScheduleEdit(s => ({ ...s, [sc.id]: toLocalInput(sc.interview_scheduled_at) }))}
+                          title="Set or change interview date"
+                        >
+                          {sc.interview_scheduled_at ? fmtDateTime(sc.interview_scheduled_at) : 'Schedule…'}
+                        </button>
+                      )}
+                    </div>
 
                     {/* Feedback */}
                     <div className="sw-card-feedback-header">

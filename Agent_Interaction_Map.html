@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Zeople | RecruiterOS — Agent Interaction Map</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg:      #0a0e1a;
+    --surface: #111827;
+    --border:  #1f2937;
+    --text:    #e5e7eb;
+    --muted:   #6b7280;
+    --haiku:   #22c55e;
+    --sonnet:  #3b82f6;
+    --opus:    #a855f7;
+    --ext:     #f59e0b;
+    --data:    #06b6d4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  /* ── Header ─────────────────────────────────────────── */
+  .page-header {
+    padding: 40px 48px 28px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, #0d1424 0%, #111827 100%);
+  }
+  .page-header h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.5px; }
+  .page-header h1 span { background: linear-gradient(90deg, #818cf8, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .page-header p { color: var(--muted); margin-top: 6px; font-size: 0.9rem; }
+
+  /* ── Legend ─────────────────────────────────────────── */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    padding: 20px 48px;
+    border-bottom: 1px solid var(--border);
+    background: #0d1117;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.8rem; color: var(--muted);
+  }
+  .legend-dot {
+    width: 12px; height: 12px; border-radius: 3px;
+  }
+  .dot-haiku  { background: var(--haiku);  }
+  .dot-sonnet { background: var(--sonnet); }
+  .dot-opus   { background: var(--opus);   }
+  .dot-ext    { background: var(--ext);    }
+  .dot-data   { background: var(--data);   }
+  .dot-logic  { background: #374151; border: 1px solid #6b7280; }
+  .legend-sep { width: 1px; background: var(--border); align-self: stretch; }
+
+  /* ── Section wrapper ─────────────────────────────────── */
+  .section {
+    padding: 40px 48px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-title {
+    font-size: 1rem; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 24px;
+  }
+
+  /* ── Mermaid diagram card ────────────────────────────── */
+  .diagram-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    overflow-x: auto;
+  }
+  .diagram-card .mermaid { min-width: 900px; }
+
+  /* ── Agent catalog grid ──────────────────────────────── */
+  .catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+  .agent-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .agent-card:hover { border-color: #374151; }
+  .agent-card-header {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .agent-number {
+    font-size: 0.7rem; font-weight: 700;
+    background: var(--border); border-radius: 4px;
+    padding: 2px 6px; color: var(--muted);
+    flex-shrink: 0;
+  }
+  .agent-name { font-size: 0.88rem; font-weight: 600; }
+  .model-badge {
+    margin-left: auto; flex-shrink: 0;
+    font-size: 0.68rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 99px;
+    letter-spacing: 0.5px;
+  }
+  .badge-haiku  { background: #052e16; color: var(--haiku);  border: 1px solid #166534; }
+  .badge-sonnet { background: #0c1a3b; color: #93c5fd;       border: 1px solid #1e40af; }
+  .badge-opus   { background: #2e1065; color: #c4b5fd;       border: 1px solid #6b21a8; }
+  .agent-step   { font-size: 0.72rem; color: var(--muted); }
+  .agent-io {
+    display: flex; flex-direction: column; gap: 3px;
+    font-size: 0.75rem; margin-top: 4px;
+  }
+  .agent-in  { color: #6ee7b7; }
+  .agent-out { color: #93c5fd; }
+  .io-label  { color: var(--muted); font-weight: 600; margin-right: 4px; }
+
+  /* ── Data flow section ───────────────────────────────── */
+  .flow-steps {
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .flow-step {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 0 16px;
+    align-items: start;
+  }
+  .flow-line {
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .flow-node-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; font-weight: 800;
+    flex-shrink: 0;
+  }
+  .flow-connector {
+    width: 2px; flex: 1; min-height: 24px;
+    background: linear-gradient(to bottom, #4f46e5, transparent);
+    margin: 2px 0;
+  }
+  .flow-content {
+    padding-bottom: 28px;
+  }
+  .flow-title {
+    font-size: 0.88rem; font-weight: 700;
+    color: #c4b5fd; margin-bottom: 4px; line-height: 28px;
+  }
+  .flow-agents {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;
+  }
+  .flow-agent-chip {
+    font-size: 0.72rem; padding: 3px 10px; border-radius: 99px;
+    border: 1px solid;
+  }
+  .chip-haiku  { border-color: #166534; color: var(--haiku);  background: #052e16; }
+  .chip-sonnet { border-color: #1e40af; color: #93c5fd;       background: #0c1a3b; }
+  .chip-opus   { border-color: #6b21a8; color: #c4b5fd;       background: #2e1065; }
+  .chip-ext    { border-color: #92400e; color: var(--ext);    background: #1c1108; }
+  .chip-logic  { border-color: #374151; color: #9ca3af;       background: #111827; }
+  .flow-note {
+    font-size: 0.72rem; color: var(--muted); margin-top: 6px;
+  }
+  .flow-parallel-tag {
+    display: inline-block;
+    font-size: 0.67rem; font-weight: 700;
+    padding: 1px 6px; border-radius: 3px;
+    background: #1c1b10; color: #fbbf24; border: 1px solid #78350f;
+    margin-left: 8px; vertical-align: middle;
+  }
+
+  /* ── Responsive ──────────────────────────────────────── */
+  @media (max-width: 768px) {
+    .page-header, .legend, .section { padding-left: 20px; padding-right: 20px; }
+    .diagram-card { padding: 16px; }
+    .catalog-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!--  Header                                                -->
+<!-- ══════════════════════════════════════════════════════ -->
+<header class="page-header">
+  <h1>Zeople | RecruiterOS <span>Agent Interaction Map</span></h1>
+  <p>21 AI agents · 8 pipeline steps · 3 model tiers · 2 external AI services</p>
+</header>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!--  Legend                                                -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot dot-haiku"></div>Claude Haiku — fast / low-latency</div>
+  <div class="legend-item"><div class="legend-dot dot-sonnet"></div>Claude Sonnet — balanced</div>
+  <div class="legend-item"><div class="legend-dot dot-opus"></div>Claude Opus — highest quality</div>
+  <div class="legend-sep"></div>
+  <div class="legend-item"><div class="legend-dot dot-ext"></div>External service (Deepgram / Twilio / SMTP)</div>
+  <div class="legend-item"><div class="legend-dot dot-data"></div>Shared state / data store</div>
+  <div class="legend-item"><div class="legend-dot dot-logic"></div>Deterministic logic (no LLM)</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!--  Main Flowchart                                        -->
+<!-- ══════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-title">Full Agent Interaction Diagram</div>
+  <div class="diagram-card">
+    <div class="mermaid">
+flowchart TD
+
+  %% ── Styles ──────────────────────────────────────────────
+  classDef haiku  fill:#052e16,stroke:#22c55e,color:#d1fae5,rx:6
+  classDef sonnet fill:#0c1a3b,stroke:#3b82f6,color:#dbeafe,rx:6
+  classDef opus   fill:#2e1065,stroke:#a855f7,color:#ede9fe,rx:6
+  classDef ext    fill:#1c1108,stroke:#f59e0b,color:#fef3c7,rx:6
+  classDef data   fill:#0c2233,stroke:#06b6d4,color:#cffafe,rx:6
+  classDef logic  fill:#111827,stroke:#6b7280,color:#d1d5db,rx:6
+  classDef gate   fill:#1c0a0a,stroke:#ef4444,color:#fee2e2,rx:6
+  classDef par    fill:#1a1500,stroke:#f59e0b,color:#fef3c7,rx:6
+
+  %% ═══════════════════════════════════════════════════════
+  %%  STEP 1 — Select JD
+  %% ═══════════════════════════════════════════════════════
+  subgraph S1["① SELECT JD"]
+    direction TB
+    S1_JOB[("Job Record\n(DB)")] -->|job object| S1_HMQ["HM Q&amp;A\nGenerator"]
+    S1_HMQ -->|"8 intake questions"| S1_OUT[("HM Questions\n(session state)")]
+  end
+
+  %% ═══════════════════════════════════════════════════════
+  %%  STEP 2 — Enhance JD
+  %% ═══════════════════════════════════════════════════════
+  subgraph S2["② ENHANCE JD"]
+    direction TB
+    S2_INPUT["JD Text\n+ Notes"] -->|raw text| S2_PARSE["JD Parser"]
+    S2_PARSE -->|"parsed job fields"| S2_PAR{{"⚡ Promise.all\n(6 agents)"}}
+    S2_PAR --> S2_FORJD["Formatted JD\nGenerator"]
+    S2_PAR --> S2_BRIEF["Recruiter Brief\nGenerator"]
+    S2_PAR --> S2_CLARQ["Clarification\nQuestions Gen"]
+    S2_PAR --> S2_REACH["Reachout\nMaterial Gen"]
+    S2_PAR --> S2_KWDS["Sourcing\nKeywords Gen"]
+    S2_PAR --> S2_MKTINT["Market\nIntelligence"]
+    S2_REGEN["Per-Question\nRegenerator"]
+    S2_CLARQ -.->|"single Q replace"| S2_REGEN
+  end
+  S2_FORJD & S2_BRIEF & S2_CLARQ & S2_REACH & S2_KWDS & S2_MKTINT -->|merged| EDATA
+
+  EDATA[("enhancement_data\n(session state)")]
+
+  %% ═══════════════════════════════════════════════════════
+  %%  STEP 3 — Source Candidates
+  %% ═══════════════════════════════════════════════════════
+  subgraph S3["③ SOURCE CANDIDATES"]
+    direction TB
+    S3_FILE["Resume File\n(PDF/DOCX)"] -->|"file bytes"| S3_PARSE["Resume Parser"]
+    S3_PARSE -->|"structured fields"| S3_EVAL["Resume Evaluator"]
+    S3_PARSE -->|"raw text"| S3_AICD["AI Content\nDetection"]
+    S3_EVAL -->|"score 0–100"| S3_OUT[("Candidate Record\n(session_candidates)")]
+    S3_AICD -->|"human/ai verdict"| S3_OUT
+  end
+
+  %% ═══════════════════════════════════════════════════════
+  %%  STEP 4 — Recruiter Screening (Live Call)
+  %% ═══════════════════════════════════════════════════════
+  subgraph S4["④ RECRUITER SCREENING"]
+    direction TB
+    S4_IQGEN["Interview Q\nGenerator"] -->|"4-6 sections"| S4_CALL{{"Live Phone Call\n(Twilio)"}}
+    S4_CALL -->|"partial transcript\n(per turn)"| S4_FU["Follow-Up\nSuggestions"]
+    S4_FU -->|"2-3 follow-up Qs"| S4_CALL
+    S4_CALL -->|"recruiter msg"| S4_SIM["Candidate\nSimulation"]
+    S4_SIM -->|"simulated reply"| S4_CALL
+    S4_CALL -->|"full transcript"| S4_DREPORT["Dual Report\nGenerator"]
+    S4_DREPORT --> S4_QAREP[("QA Report\n(session state)")]
+    S4_DREPORT --> S4_CREP[("Candidate Report\n(session state)")]
+  end
+
+  %% ═══════════════════════════════════════════════════════
+  %%  STEP 5 — Video Interview
+  %% ═══════════════════════════════════════════════════════
+  subgraph S5["⑤ VIDEO INTERVIEW"]
+    direction TB
+    S5_VIQGEN["Video Q\nGenerator"] -->|"questions list"| S5_INVITE["Candidate\nRecords Video"]
+    S5_INVITE -->|"audio blob"| S5_DG["Deepgram\nTranscription"]
+    S5_DG -->|"transcript text"| S5_VIEVAL["Video\nEvaluator"]
+    S5_VIEVAL --> S5_OUT[("Evaluation +\nCompetency Scores")]
+  end
+
+  %% ═══════════════════════════════════════════════════════
+  %%  STEP 8 — POFU
+  %% ═══════════════════════════════════════════════════════
+  subgraph S8["⑧ POST-OFFER FOLLOW-UP"]
+    direction TB
+    S8_RISK["Risk Scorer\n(Deterministic)"] -->|"risk level + trigger"| S8_TRIGGER["Email Trigger\nLogic"]
+    S8_TRIGGER -->|"candidate context"| S8_EMAILGEN["POFU Email\nGenerator"]
+    S8_EMAILGEN -->|"subject + body"| S8_SMTP["SMTP Mailer"]
+    S8_SMTP -->|"reply event"| S8_RISK
+  end
+
+  %% ═══════════════════════════════════════════════════════
+  %%  Cross-step data flows
+  %% ═══════════════════════════════════════════════════════
+  S1 -->|"job object in session"| S2
+  S2 -->|"candidates stage"| S3
+  EDATA -->|"JD context"| S4_IQGEN
+  EDATA -->|"JD context"| S5_VIQGEN
+  S3 -->|"candidates shortlisted"| S4
+  S4 -->|"screening decision"| S5
+  S5 -->|"vi scores → Step 6-7"| OFFER{{"Offer Decision\n(Steps 6-7)"}}
+  OFFER -->|"accepted candidates"| S8
+
+  %% ═══════════════════════════════════════════════════════
+  %%  Standalone / Parallel paths
+  %% ═══════════════════════════════════════════════════════
+  EDATA -.->|"Job Qualification flow\n(async, post Step 1)"| S2_REFRESH["Post-Qual\nJD Refresh"]
+  S2_REFRESH -.->|"updated JD assets"| EDATA
+
+  %% ═══════════════════════════════════════════════════════
+  %%  Class assignments
+  %% ═══════════════════════════════════════════════════════
+  class S1_HMQ,S2_PARSE,S2_FORJD,S2_BRIEF,S2_CLARQ,S2_REACH,S2_KWDS,S2_MKTINT,S2_REGEN,S5_VIQGEN,S2_REFRESH sonnet
+  class S4_FU,S4_SIM,S3_PARSE,S3_EVAL,S3_AICD,S8_EMAILGEN haiku
+  class S4_IQGEN,S4_DREPORT opus
+  class S5_VIEVAL sonnet
+  class S5_DG,S8_SMTP ext
+  class S4_CALL,S5_INVITE gate
+  class EDATA,S1_OUT,S3_OUT,S4_QAREP,S4_CREP,S5_OUT data
+  class S1_JOB data
+  class S8_RISK,S8_TRIGGER logic
+  class S2_PAR par
+  class OFFER gate
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!--  Step-by-Step Data Flow                               -->
+<!-- ══════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-title">Step-by-Step Agent Execution Flow</div>
+  <div class="flow-steps">
+
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-node-num">1</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-content">
+        <div class="flow-title">Select JD — Intake Qualification</div>
+        <div class="flow-agents">
+          <span class="flow-agent-chip chip-sonnet">HM Q&A Generator</span>
+        </div>
+        <div class="flow-note">Job record → 8 structured intake questions for hiring manager call. Optionally regenerates individual questions. Output stored in session state.</div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-node-num">2</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-content">
+        <div class="flow-title">Enhance JD — 6 Agents in Parallel <span class="flow-parallel-tag">⚡ Promise.all</span></div>
+        <div class="flow-agents">
+          <span class="flow-agent-chip chip-sonnet">JD Parser</span>
+          <span class="flow-agent-chip chip-sonnet">Formatted JD Gen</span>
+          <span class="flow-agent-chip chip-sonnet">Recruiter Brief Gen</span>
+          <span class="flow-agent-chip chip-sonnet">Clarification Questions Gen</span>
+          <span class="flow-agent-chip chip-sonnet">Reachout Material Gen</span>
+          <span class="flow-agent-chip chip-sonnet">Sourcing Keywords Gen</span>
+          <span class="flow-agent-chip chip-sonnet">Market Intelligence</span>
+          <span class="flow-agent-chip chip-sonnet">Per-Question Regenerator</span>
+        </div>
+        <div class="flow-note">JD Parser runs first, then 6 generators fire concurrently via Promise.all. All outputs merged into <code>enhancement_data</code> session state. Per-Question Regenerator replaces a single clarification question on demand (sequential).</div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-node-num">3</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-content">
+        <div class="flow-title">Source Candidates — Resume Processing</div>
+        <div class="flow-agents">
+          <span class="flow-agent-chip chip-haiku">Resume Parser</span>
+          <span class="flow-agent-chip chip-haiku">Resume Evaluator</span>
+          <span class="flow-agent-chip chip-haiku">AI Content Detection</span>
+        </div>
+        <div class="flow-note">Resume Parser extracts structured fields from PDF/DOCX. Its output feeds two independent agents: Resume Evaluator (0–100 match score) and AI Content Detection (human/ai verdict). Both results stored per candidate.</div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-node-num">4</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-content">
+        <div class="flow-title">Recruiter Screening — Live Call Loop</div>
+        <div class="flow-agents">
+          <span class="flow-agent-chip chip-opus">Interview Q Generator</span>
+          <span class="flow-agent-chip chip-ext">Twilio Voice</span>
+          <span class="flow-agent-chip chip-haiku">Follow-Up Suggestions</span>
+          <span class="flow-agent-chip chip-haiku">Candidate Simulation</span>
+          <span class="flow-agent-chip chip-opus">Dual Report Generator</span>
+        </div>
+        <div class="flow-note">Interview Q Generator produces question guide before the call. During the live call, Follow-Up Suggestions fire per recruiter turn (real-time, Haiku for latency). Candidate Simulation provides practice replies. After call ends, Dual Report Generator produces QA Report + Candidate Report in one Opus call.</div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-node-num">5</div>
+        <div class="flow-connector"></div>
+      </div>
+      <div class="flow-content">
+        <div class="flow-title">Video Interview — Async Transcription Pipeline</div>
+        <div class="flow-agents">
+          <span class="flow-agent-chip chip-sonnet">Video Q Generator</span>
+          <span class="flow-agent-chip chip-ext">Deepgram Transcription</span>
+          <span class="flow-agent-chip chip-sonnet">Video Evaluator</span>
+        </div>
+        <div class="flow-note">Video Q Generator creates interview questions from JD. Candidate records video responses. Each response is transcribed via Deepgram (async, stored). Video Evaluator then evaluates all responses together — producing competency scores, hiring recommendation, per-question analysis.</div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-line">
+        <div class="flow-node-num">8</div>
+        <div class="flow-connector" style="background:transparent"></div>
+      </div>
+      <div class="flow-content">
+        <div class="flow-title">Post-Offer Follow-Up — Scheduler Loop</div>
+        <div class="flow-agents">
+          <span class="flow-agent-chip chip-logic">Risk Scorer</span>
+          <span class="flow-agent-chip chip-logic">Email Trigger Logic</span>
+          <span class="flow-agent-chip chip-haiku">POFU Email Generator</span>
+          <span class="flow-agent-chip chip-ext">SMTP Mailer</span>
+        </div>
+        <div class="flow-note">Risk Scorer calculates risk score deterministically (state + DOJ proximity + engagement recency). Email Trigger Logic selects the right email type from a 9-step sequence. POFU Email Generator drafts a warm, personalized email (Haiku for cost). Candidate reply → updates risk score → loop continues.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!--  Agent Catalog                                        -->
+<!-- ══════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="section-title">Agent Catalog — All 21 Agents</div>
+  <div class="catalog-grid">
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#01</span>
+        <span class="agent-name">JD Parser</span>
+        <span class="model-badge badge-sonnet">Sonnet</span>
+      </div>
+      <div class="agent-step">Step 2 · enhance-jd.js · runParseFields()</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Raw JD text</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Structured fields (title, skills, salary, location…)</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#02</span>
+        <span class="agent-name">Formatted JD Generator</span>
+        <span class="model-badge badge-sonnet">Sonnet</span>
+      </div>
+      <div class="agent-step">Step 2 · enhance-jd.js · genFormattedJD()</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Job context + client notes</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Polished Markdown JD (7 sections)</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#03</span>
+        <span class="agent-name">Recruiter Brief Generator</span>
+        <span class="model-badge badge-sonnet">Sonnet</span>
+      </div>
+      <div class="agent-step">Step 2 · enhance-jd.js · genRecruiterBrief()</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Job context + client notes</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Plain-English reference card (&lt;250 words)</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#04</span>
+        <span class="agent-name">Clarification Questions Gen</span>
+        <span class="model-badge badge-sonnet">Sonnet</span>
+      </div>
+      <div class="agent-step">Step 2 · enhance-jd.js · genClarificationQuestions()</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Job context + client notes</div>
+        <div class="agent-out"><span class="io-label">OUT</span>JSON — 7 categories, 2–6 questions each with rationale</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#05</span>
+        <span class="agent-name">Reachout Material Gen</span>
+        <span class="model-badge badge-sonnet">Sonnet</span>
+      </div>
+      <div class="agent-step">Step 2 · enhance-jd.js · genReachoutMaterial()</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Job context + notes + company script</div>
+        <div class="agent-out"><span class="io-label">OUT</span>WhatsApp msg, LinkedIn msg, phone pitch, screening Qs</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#06</span>
+        <span class="agent-name">Sourcing Keywords Gen</span>
+        <span class="model-badge badge-sonnet">Sonnet</span>
+      </div>
+      <div class="agent-step">Step 2 · enhance-jd.js · genSourcingKeywords()</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Job context + client notes</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Boolean strings for Naukri/LinkedIn (primary, secondary, exclusions)</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#07</span>
+        <span class="agent-name">Market Intelligence</span>
+        <span class="model-badge badge-sonnet">Sonnet</span>
+      </div>
+      <div class="agent-step">Step 2 · enhance-jd.js · genMarketIntelligence()</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Job context</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Salary benchmarks, demand signal, competitor hiring, candidate expectations</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#08</span>
+        <span class="agent-name">Per-Question Regenerator</span>
+        <span class="model-badge badge-sonnet">Sonnet</span>
+      </div>
+      <div class="agent-step">Step 2 · enhance-jd.js · POST /enhance-jd/regen-question</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Current question + improvement instruction</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Single regenerated question + new rationale</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#09</span>
+        <span class="agent-name">Resume Parser</span>
+        <span class="model-badge badge-haiku">Haiku</span>
+      </div>
+      <div class="agent-step">Step 3 · candidates.js · POST /candidates/parse-resume</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Resume file (PDF/DOCX/TXT)</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Structured JSON (name, email, skills, experience…)</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#10</span>
+        <span class="agent-name">Resume Evaluator</span>
+        <span class="model-badge badge-haiku">Haiku</span>
+      </div>
+      <div class="agent-step">Step 3 · sessions.js · POST /sessions/:id/candidates/:cid/evaluate</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Resume text + job requirements</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Score 0–100, verdict, strengths, experience level</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#11</span>
+        <span class="agent-name">AI Content Detection</span>
+        <span class="model-badge badge-haiku">Haiku</span>
+      </div>
+      <div class="agent-step">Step 3 · ai.js · POST /ai/check-ai-content</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Resume / profile text</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Verdict (human→ai_generated), confidence 0–100, indicators</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#12</span>
+        <span class="agent-name">Interview Q Generator</span>
+        <span class="model-badge badge-opus">Opus</span>
+      </div>
+      <div class="agent-step">Step 4 · ai.js · POST /ai/generate-questions</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>JD text + resume text</div>
+        <div class="agent-out"><span class="io-label">OUT</span>4–6 sections, 3–5 questions each</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#13</span>
+        <span class="agent-name">Follow-Up Suggestions</span>
+        <span class="model-badge badge-haiku">Haiku</span>
+      </div>
+      <div class="agent-step">Step 4 · ai.js · POST /ai/suggest (real-time per turn)</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Last ~6 transcript turns + current question</div>
+        <div class="agent-out"><span class="io-label">OUT</span>2–3 sharp follow-up questions (&lt;20 words each)</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#14</span>
+        <span class="agent-name">Candidate Simulation</span>
+        <span class="model-badge badge-haiku">Haiku</span>
+      </div>
+      <div class="agent-step">Step 4 · ai.js · POST /ai/sim-reply (practice mode)</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Recruiter message + transcript history + persona</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Conversational candidate reply (2–4 sentences)</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#15</span>
+        <span class="agent-name">Dual Report Generator</span>
+        <span class="model-badge badge-opus">Opus</span>
+      </div>
+      <div class="agent-step">Step 4 · ai.js · POST /ai/generate-reports</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Full transcript + JD + resume</div>
+        <div class="agent-out"><span class="io-label">OUT</span>QA Report (8 dims) + Candidate Evaluation (12 dims)</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#16</span>
+        <span class="agent-name">Video Q Generator</span>
+        <span class="model-badge badge-sonnet">Sonnet</span>
+      </div>
+      <div class="agent-step">Step 5 · video-interviews.js · POST /vi/interviews/:id/generate</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Job description + count + mix spec</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Question list (text, type, time estimate)</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#17</span>
+        <span class="agent-name">Deepgram Transcription</span>
+        <span class="model-badge" style="background:#1c1108;color:#f59e0b;border:1px solid #92400e">External</span>
+      </div>
+      <div class="agent-step">Step 5 · video-interviews.js · transcribeFile()</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Audio/video file path</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Transcript text (stored in video_responses)</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#18</span>
+        <span class="agent-name">Video Evaluator</span>
+        <span class="model-badge badge-sonnet">Sonnet</span>
+      </div>
+      <div class="agent-step">Step 5 · video-interviews.js · POST /vi/candidates/:cid/evaluate</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>JD + all transcribed responses</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Overall score, hiring rec, 5 competencies, per-question analysis</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#19</span>
+        <span class="agent-name">HM Q&A Generator</span>
+        <span class="model-badge badge-sonnet">Sonnet</span>
+      </div>
+      <div class="agent-step">Step 1 · jobs.js · POST /jobs/:id/qualification-questions</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Job object (title, skills, description)</div>
+        <div class="agent-out"><span class="io-label">OUT</span>8 structured intake questions for hiring manager call</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#20</span>
+        <span class="agent-name">Post-Qual JD Refresh</span>
+        <span class="model-badge badge-sonnet">Sonnet</span>
+      </div>
+      <div class="agent-step">Step 1 (async) · jobs.js · triggerJDRefresh()</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Job object + HM Q&A transcript</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Full JD asset set regenerated with HM insights</div>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-card-header">
+        <span class="agent-number">#21</span>
+        <span class="agent-name">POFU Email Generator</span>
+        <span class="model-badge badge-haiku">Haiku</span>
+      </div>
+      <div class="agent-step">Step 8 · pofu-engine.js · generateEmail()</div>
+      <div class="agent-io">
+        <div class="agent-in"><span class="io-label">IN</span>Candidate state + trigger reason (9 types)</div>
+        <div class="agent-out"><span class="io-label">OUT</span>Personalized email subject + body</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!--  Model Distribution                                   -->
+<!-- ══════════════════════════════════════════════════════ -->
+<section class="section" style="padding-bottom: 64px;">
+  <div class="section-title">Model Tier Breakdown</div>
+  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
+
+    <div style="background:var(--surface);border:1px solid #166534;border-radius:10px;padding:20px;">
+      <div style="color:var(--haiku);font-size:1.4rem;font-weight:800;">7</div>
+      <div style="font-size:0.85rem;font-weight:600;margin-top:2px;">Claude Haiku</div>
+      <div style="color:var(--muted);font-size:0.75rem;margin-top:6px;line-height:1.5;">
+        Fast, cheap, low-latency.<br>
+        Used for: real-time suggestions, resume parsing &amp; scoring, AI content detection, POFU emails.
+      </div>
+    </div>
+
+    <div style="background:var(--surface);border:1px solid #1e40af;border-radius:10px;padding:20px;">
+      <div style="color:#93c5fd;font-size:1.4rem;font-weight:800;">12</div>
+      <div style="font-size:0.85rem;font-weight:600;margin-top:2px;">Claude Sonnet</div>
+      <div style="color:var(--muted);font-size:0.75rem;margin-top:6px;line-height:1.5;">
+        Balanced quality + speed.<br>
+        Used for: all JD enhancement agents, video interview Q&A, HM questions, JD refresh.
+      </div>
+    </div>
+
+    <div style="background:var(--surface);border:1px solid #6b21a8;border-radius:10px;padding:20px;">
+      <div style="color:#c4b5fd;font-size:1.4rem;font-weight:800;">2</div>
+      <div style="font-size:0.85rem;font-weight:600;margin-top:2px;">Claude Opus</div>
+      <div style="color:var(--muted);font-size:0.75rem;margin-top:6px;line-height:1.5;">
+        Highest quality, complex output.<br>
+        Used for: Interview Q Generator (multi-section guide), Dual Report Generator (two 8-dim reports).
+      </div>
+    </div>
+
+    <div style="background:var(--surface);border:1px solid #92400e;border-radius:10px;padding:20px;">
+      <div style="color:var(--ext);font-size:1.4rem;font-weight:800;">2</div>
+      <div style="font-size:0.85rem;font-weight:600;margin-top:2px;">External Services</div>
+      <div style="color:var(--muted);font-size:0.75rem;margin-top:6px;line-height:1.5;">
+        Non-Claude AI/infra.<br>
+        Deepgram (audio → text), SMTP Mailer (email delivery).
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      background:        '#111827',
+      primaryColor:      '#1e3a5f',
+      primaryTextColor:  '#dbeafe',
+      primaryBorderColor:'#3b82f6',
+      lineColor:         '#4b5563',
+      secondaryColor:    '#0c2233',
+      tertiaryColor:     '#1a1a2e',
+      fontFamily:        "'Segoe UI', system-ui, sans-serif",
+      fontSize:          '13px'
+    },
+    flowchart: {
+      curve:          'basis',
+      nodeSpacing:    40,
+      rankSpacing:    60,
+      useMaxWidth:    false,
+      htmlLabels:     true
+    }
+  });
+</script>
+</body>
+</html>

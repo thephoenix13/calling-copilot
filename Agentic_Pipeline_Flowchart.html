@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zeople | RecruiterOS — Agentic Pipeline Flowchart</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0e1a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 40px 24px 60px;
+    }
+
+    /* ── Header ──────────────────────────────────────────────── */
+    .page-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .page-header .badge {
+      display: inline-block;
+      background: rgba(124,58,237,0.2);
+      border: 1px solid rgba(124,58,237,0.4);
+      color: #a78bfa;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+    }
+    .page-header h1 {
+      font-size: 32px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 50%, #34d399 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+    }
+    .page-header p {
+      font-size: 14px;
+      color: #64748b;
+      max-width: 560px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ── Pipeline steps overview strip ──────────────────────── */
+    .steps-strip {
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      flex-wrap: wrap;
+      max-width: 1100px;
+      margin: 0 auto 40px;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .step-chip {
+      flex: 1;
+      min-width: 120px;
+      padding: 12px 10px;
+      text-align: center;
+      border-right: 1px solid #1e293b;
+      background: #0f172a;
+      transition: background 0.15s;
+    }
+    .step-chip:last-child { border-right: none; }
+    .step-chip:hover { background: #1e293b; }
+    .step-chip .num {
+      display: inline-block;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(124,58,237,0.2);
+      border: 1px solid rgba(124,58,237,0.4);
+      color: #a78bfa;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 22px;
+      margin: 0 auto 6px;
+    }
+    .step-chip .label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #94a3b8;
+      line-height: 1.3;
+    }
+
+    /* ── Diagram container ───────────────────────────────────── */
+    .diagram-wrapper {
+      max-width: 1200px;
+      margin: 0 auto 40px;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 40px 20px;
+      overflow-x: auto;
+    }
+    .mermaid { display: flex; justify-content: center; }
+
+    /* ── Legend ──────────────────────────────────────────────── */
+    .legend {
+      max-width: 1200px;
+      margin: 0 auto 32px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .legend-section {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .legend-section h4 {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: #475569;
+      margin-bottom: 10px;
+    }
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .legend-row:last-child { margin-bottom: 0; }
+    .lsym {
+      width: 24px;
+      height: 16px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+    .lsym-step   { background: rgba(124,58,237,0.2); border: 1px solid rgba(124,58,237,0.4); }
+    .lsym-gate   { background: rgba(251,191,36,0.15); border: 1px solid rgba(251,191,36,0.4); }
+    .lsym-action { background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.3); }
+    .lsym-output { background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.3); }
+    .lsym-end    { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); }
+
+    /* ── Key API table ───────────────────────────────────────── */
+    .api-table-wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .api-table-wrap h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 16px;
+    }
+    .api-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+    .api-card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .api-card .step-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #a78bfa;
+      margin-bottom: 8px;
+    }
+    .api-card .endpoint {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    .api-card .method {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .method-get  { background: rgba(52,211,153,0.15); color: #34d399; }
+    .method-post { background: rgba(96,165,250,0.15); color: #60a5fa; }
+    .method-put  { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .method-patch{ background: rgba(167,139,250,0.15); color: #a78bfa; }
+    .method-del  { background: rgba(248,113,113,0.15); color: #f87171; }
+    .api-card .path { color: #94a3b8; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; }
+
+    /* ── Gate key ────────────────────────────────────────────── */
+    .gates-wrap {
+      max-width: 1200px;
+      margin: 0 auto 32px;
+    }
+    .gates-wrap h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 16px;
+    }
+    .gates-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+    .gate-card {
+      background: #0f172a;
+      border: 1px solid rgba(251,191,36,0.2);
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      gap: 10px;
+    }
+    .gate-badge {
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(251,191,36,0.1);
+      color: #fbbf24;
+      border: 1px solid rgba(251,191,36,0.3);
+      border-radius: 4px;
+      padding: 2px 7px;
+      white-space: nowrap;
+      height: fit-content;
+    }
+    .gate-text { font-size: 12px; color: #94a3b8; line-height: 1.5; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <div class="page-header">
+    <div class="badge">Operational Flowchart</div>
+    <h1>Zeople | RecruiterOS — Agentic Pipeline</h1>
+    <p>End-to-end workflow from job selection through candidate hiring and post-offer follow-up.</p>
+  </div>
+
+  <!-- ── Steps overview strip ───────────────────────────────── -->
+  <div class="steps-strip">
+    <div class="step-chip"><div class="num">1</div><span class="label">Select JD</span></div>
+    <div class="step-chip"><div class="num">2</div><span class="label">Enhance JD</span></div>
+    <div class="step-chip"><div class="num">3</div><span class="label">Source Candidates</span></div>
+    <div class="step-chip"><div class="num">4</div><span class="label">Recruiter Screening</span></div>
+    <div class="step-chip"><div class="num">5</div><span class="label">Video Interviews</span></div>
+    <div class="step-chip"><div class="num">6</div><span class="label">AI Reports</span></div>
+    <div class="step-chip"><div class="num">7</div><span class="label">Decision</span></div>
+    <div class="step-chip"><div class="num">8</div><span class="label">Pipeline Tracker</span></div>
+    <div class="step-chip" style="background:rgba(52,211,153,0.06)"><div class="num" style="background:rgba(52,211,153,0.15);border-color:rgba(52,211,153,0.4);color:#34d399">✓</div><span class="label" style="color:#34d399">POFU</span></div>
+  </div>
+
+  <!-- ── Main diagram ────────────────────────────────────────── -->
+  <div class="diagram-wrapper">
+    <pre class="mermaid">
+%%{init: {
+  "theme": "dark",
+  "themeVariables": {
+    "primaryColor": "#1e293b",
+    "primaryTextColor": "#e2e8f0",
+    "primaryBorderColor": "#334155",
+    "lineColor": "#60a5fa",
+    "secondaryColor": "#0f172a",
+    "tertiaryColor": "#0a0e1a",
+    "background": "#0f172a",
+    "mainBkg": "#1e293b",
+    "nodeBorder": "#334155",
+    "clusterBkg": "#0a0e1a",
+    "clusterBorder": "#1e293b",
+    "titleColor": "#a78bfa",
+    "edgeLabelBackground": "#0f172a",
+    "fontSize": "13px"
+  },
+  "flowchart": { "curve": "basis", "padding": 20 }
+}}%%
+
+flowchart TD
+
+  START(["🚀 Session Created"])
+
+  %% ═══════════════════════════════════════════════
+  %% STEP 1 — Select JD
+  %% ═══════════════════════════════════════════════
+  subgraph SG1["  ①  Select JD  "]
+    direction TB
+    S1A["Browse Active Jobs\nGET /jobs?status=active"] --> S1B["Preview: Title · Skills\nLocation · Salary · Experience"]
+    S1B --> S1C["Confirm Selection"]
+  end
+
+  START --> S1A
+  S1C --> G1{"job_id\nset?"}
+  G1 -- "✓" --> S2A
+
+  %% ═══════════════════════════════════════════════
+  %% STEP 2 — Enhance JD
+  %% ═══════════════════════════════════════════════
+  subgraph SG2["  ②  Enhance JD — AI Asset Generation  "]
+    direction TB
+    S2A["Add Client Notes\n+ Company Intro Script"] --> S2B["Generate 5 AI Assets\nPOST /enhance-jd  ~40–60s"]
+    S2B --> S2C["📄 Formatted JD\n📋 Recruiter Brief\n❓ Clarification Questions\n📨 Reachout Material\n🔍 Sourcing Keywords"]
+    S2C --> S2D{"Qualification\nCall?"}
+    S2D -- "Yes" --> S2E["Answer Clarification\nQuestions"]
+    S2E --> S2F["Save Responses\nPer Question"]
+    S2F --> S2G["Mark as Qualified\n& Refresh All Assets"]
+    S2G --> S2H["All 5 Assets Regenerated\nwith Q&A Context"]
+    S2H --> S2I["Review · Edit · Regenerate\nDownload Assets"]
+    S2D -- "Skip" --> S2I
+    S2I --> S2J["Save & Continue →"]
+  end
+
+  S2J --> G2{"enhancement\n_saved = 1?"}
+  G2 -- "✓" --> S3A
+
+  %% ═══════════════════════════════════════════════
+  %% STEP 3 — Source Candidates
+  %% ═══════════════════════════════════════════════
+  subgraph SG3["  ③  Source Candidates  "]
+    direction TB
+    S3A["AI Match Scoring\nTop 50 by Required + Preferred Skills"] --> S3B{"Add Existing\nor New Profile?"}
+    S3B -- "Existing" --> S3C["Select via Checkboxes\nPOST /sessions/:id/candidates"]
+    S3B -- "New" --> S3D["Upload Resume PDF/DOCX\nPOST /candidates/parse-resume"]
+    S3D --> S3E["Auto-parse: Name · Email · Skills\nExperience · Title · Company"]
+    S3E --> S3F["Create Candidate Record\nPOST /candidates"]
+    S3F --> S3C
+    S3C --> S3G["AI Resume Evaluation 🔄 Background\nScore 0–100 · Strengths · Verdict"]
+    S3C --> S3H["AI Content Check (Optional)\nDetect AI-written Resume"]
+  end
+
+  S3G --> G3{"candidates\n> 0?"}
+  G3 -- "✓" --> S4A
+
+  %% ═══════════════════════════════════════════════
+  %% STEP 4 — Recruiter Screening
+  %% ═══════════════════════════════════════════════
+  subgraph SG4["  ④  Recruiter Screening  "]
+    direction TB
+    S4A["Review Each Candidate\nMatch% · Resume Score · Skills"] --> S4B{"Screening\nDecision"}
+    S4B -- "✓ Shortlist" --> S4C["Set Assessment Type\nInterview / MCQ / Coding / SME"]
+    S4C --> S4D["Send Assessment\nInvitation Email"]
+    S4B -- "✗ Reject" --> S4E["Out of Active Pipeline"]
+    S4B -- "⏸ Hold" --> S4F["Deferred — Not Advancing"]
+    S4A --> S4G["Record Voice Note\nor Type Feedback"]
+  end
+
+  S4D --> G4{"≥ 1 candidate\nshortlisted?"}
+  S4E --> G4
+  S4F --> G4
+  G4 -- "✓" --> S5A
+
+  %% ═══════════════════════════════════════════════
+  %% STEP 5 — Video Interview Scheduler
+  %% ═══════════════════════════════════════════════
+  subgraph SG5["  ⑤  Schedule Video Interviews  (Optional)  "]
+    direction TB
+    S5A["Select Interview Template\nor Create New\nGET / POST /vi/interviews"] --> S5B["Pick Shortlisted\nCandidates"]
+    S5B --> S5C["Send Bulk Invitations\nPOST /vi/sessions/:id/bulk-invite"]
+    S5C --> S5D["📧 Candidate receives:\nPrivate Link + Access Code\nEmail with interview details"]
+  end
+
+  S5D --> G5{"Continue?\n(step optional)"}
+  G5 -- "✓" --> S6A
+
+  %% ═══════════════════════════════════════════════
+  %% STEP 6 — AI Interview Reports
+  %% ═══════════════════════════════════════════════
+  subgraph SG6["  ⑥  AI Interview Reports  "]
+    direction TB
+    S6A["Fetch Video Interview Scores\nGET /vi/sessions/:id/vi-scores"] --> S6B["View Responses · Transcripts\nPlay Recorded Videos"]
+    S6B --> S6C["Transcribe + Evaluate\nPOST /vi/candidates/:id/evaluate"]
+    S6C --> S6D["AI Report:\nOverall Score · Competencies\nStrengths · Weaknesses · Insights"]
+    S6D --> S6E{"Review\nDecision"}
+    S6E -- "Move Ahead" --> S6F["Enter / Confirm Score\nvi_review = move_ahead"]
+    S6E -- "Hold" --> S6G["vi_review = hold"]
+    S6E -- "Reject" --> S6H["vi_review = reject"]
+  end
+
+  S6F --> G6{"All shortlisted\ncandidates reviewed?"}
+  S6G --> G6
+  S6H --> G6
+  G6 -- "✓" --> S7A
+
+  %% ═══════════════════════════════════════════════
+  %% STEP 7 — Final Decision
+  %% ═══════════════════════════════════════════════
+  subgraph SG7["  ⑦  Final Decision  "]
+    direction TB
+    S7A["Review All Scored\nCandidates"] --> S7B{"Final Decision\nper Candidate"}
+    S7B -- "Proceed" --> S7C["Set Interview Level\nL1  /  L2  /  L3"]
+    S7C --> S7D["Notify Candidate\nvia Email"]
+    S7B -- "Pool" --> S7E["Talent Pool\nfor Future Openings"]
+  end
+
+  S7D --> G7{"≥ 1 candidate\nset to Proceed?"}
+  S7E --> G7
+  G7 -- "✓" --> S8A
+
+  %% ═══════════════════════════════════════════════
+  %% STEP 8 — Pipeline Tracker
+  %% ═══════════════════════════════════════════════
+  subgraph SG8["  ⑧  Pipeline Tracker — Live Kanban Board  "]
+    direction LR
+    S8A["Candidate Enters\nKanban"] --> S8L1["L1 Interview"]
+    S8L1 -- "Pass" --> S8L2["L2 Interview"]
+    S8L2 -- "Pass" --> S8L3["L3 Interview"]
+    S8L3 -- "Pass" --> S8SEL["🎉 Selected"]
+    S8L1 -- "Hold / Reject" --> S8OUT["Hold or Reject\nat Any Level"]
+    S8L2 -- "Hold / Reject" --> S8OUT
+    S8L3 -- "Hold / Reject" --> S8OUT
+    S8A --> S8NOTE["Add Feedback\n+ Voice Notes at Each Level"]
+    S8SEL --> S8POFU["🔗 Enrol in POFU\nPOST /pofu"]
+  end
+
+  %% ═══════════════════════════════════════════════
+  %% POFU — Post-Offer Follow-Up
+  %% ═══════════════════════════════════════════════
+  S8POFU --> PA
+
+  subgraph SGPOFU["  Post-Offer Follow-Up (POFU)  "]
+    direction TB
+    PA["Offer Accepted\n🤖 Welcome Email sent automatically"] --> PB["Resignation Check\nAuto email after 2 days"]
+    PB --> PC["Notice Period\nBGV Document Reminder"]
+    PC --> PD["T-14 Pre-joining Checklist\nT-7 Warmup Email"]
+    PD --> PE["T-1 Joining Tomorrow Email"]
+    PE --> PF["🎯 Joined"]
+    PA --> PRISK["⚠ Risk Monitoring\nEngagement scoring · Auto risk emails\nHigh / Medium / Low"]
+    PRISK --> PF
+    PA -- "Candidate Drops" --> PDROP["Offer Dropped\nRisk score → 100"]
+  end
+
+  PF --> DONE(["✅ Recruitment Complete"])
+
+  %% ═══════════════════════════════════════════════
+  %% Node styles
+  %% ═══════════════════════════════════════════════
+  classDef gate fill:#1c1410,stroke:#fbbf24,color:#fbbf24,font-weight:600
+  classDef startend fill:#0d1f0d,stroke:#34d399,color:#34d399,font-weight:700
+  classDef pofu fill:#0d1a2d,stroke:#60a5fa,color:#93c5fd
+  classDef dropped fill:#1f0d0d,stroke:#f87171,color:#fca5a5
+
+  class G1,G2,G3,G4,G5,G6,G7 gate
+  class START,DONE startend
+  class PA,PB,PC,PD,PE,PF,PRISK pofu
+  class PDROP dropped
+    </pre>
+  </div>
+
+  <!-- ── Gate conditions ────────────────────────────────────── -->
+  <div class="gates-wrap">
+    <h3>Step Gate Conditions</h3>
+    <div class="gates-grid">
+      <div class="gate-card">
+        <div class="gate-badge">Gate 1→2</div>
+        <div class="gate-text">A job must be selected (<code>job_id</code> is set on the session)</div>
+      </div>
+      <div class="gate-card">
+        <div class="gate-badge">Gate 2→3</div>
+        <div class="gate-text">JD assets generated and saved (<code>enhancement_saved = 1</code>)</div>
+      </div>
+      <div class="gate-card">
+        <div class="gate-badge">Gate 3→4</div>
+        <div class="gate-text">At least one candidate added to the session</div>
+      </div>
+      <div class="gate-card">
+        <div class="gate-badge">Gate 4→5</div>
+        <div class="gate-text">At least one candidate marked <strong>Shortlisted</strong> (screening_status = pass)</div>
+      </div>
+      <div class="gate-card">
+        <div class="gate-badge">Gate 5→6</div>
+        <div class="gate-text">Optional step — can skip if no video interviews needed</div>
+      </div>
+      <div class="gate-card">
+        <div class="gate-badge">Gate 6→7</div>
+        <div class="gate-text">All shortlisted candidates reviewed; all "Move Ahead" have a score</div>
+      </div>
+      <div class="gate-card">
+        <div class="gate-badge">Gate 7→8</div>
+        <div class="gate-text">At least one candidate set to <strong>Proceed</strong> with an interview level</div>
+      </div>
+      <div class="gate-card">
+        <div class="gate-badge">POFU Entry</div>
+        <div class="gate-text">Candidate reaches <strong>Selected</strong> column in Kanban → recruiter enrols manually</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── API reference ───────────────────────────────────────── -->
+  <div class="api-table-wrap">
+    <h3>Backend API — Per Step</h3>
+    <div class="api-grid">
+
+      <div class="api-card">
+        <div class="step-label">① Select JD</div>
+        <div class="endpoint"><span class="method method-get">GET</span><span class="path">/jobs?status=active</span></div>
+        <div class="endpoint"><span class="method method-patch">PATCH</span><span class="path">/sessions/:id</span></div>
+      </div>
+
+      <div class="api-card">
+        <div class="step-label">② Enhance JD</div>
+        <div class="endpoint"><span class="method method-post">POST</span><span class="path">/enhance-jd</span></div>
+        <div class="endpoint"><span class="method method-post">POST</span><span class="path">/enhance-jd/regen-question</span></div>
+        <div class="endpoint"><span class="method method-patch">PATCH</span><span class="path">/jobs/:id/qualify</span></div>
+        <div class="endpoint"><span class="method method-patch">PATCH</span><span class="path">/sessions/:id</span></div>
+      </div>
+
+      <div class="api-card">
+        <div class="step-label">③ Source Candidates</div>
+        <div class="endpoint"><span class="method method-get">GET</span><span class="path">/candidates</span></div>
+        <div class="endpoint"><span class="method method-post">POST</span><span class="path">/candidates/parse-resume</span></div>
+        <div class="endpoint"><span class="method method-post">POST</span><span class="path">/candidates</span></div>
+        <div class="endpoint"><span class="method method-post">POST</span><span class="path">/sessions/:id/candidates</span></div>
+        <div class="endpoint"><span class="method method-post">POST</span><span class="path">/sessions/:id/candidates/:scId/evaluate</span></div>
+        <div class="endpoint"><span class="method method-post">POST</span><span class="path">/ai/check-ai-content</span></div>
+        <div class="endpoint"><span class="method method-del">DEL</span><span class="path">/sessions/:id/candidates/:scId</span></div>
+      </div>
+
+      <div class="api-card">
+        <div class="step-label">④ Recruiter Screening</div>
+        <div class="endpoint"><span class="method method-put">PUT</span><span class="path">/sessions/:id/candidates/:scId</span></div>
+        <div class="endpoint"><span class="step-label" style="font-size:10px;color:#475569;padding:0">Fields: screening_status · pipeline_feedback · assessment_type</span></div>
+      </div>
+
+      <div class="api-card">
+        <div class="step-label">⑤ Video Interview Scheduler</div>
+        <div class="endpoint"><span class="method method-get">GET</span><span class="path">/vi/interviews</span></div>
+        <div class="endpoint"><span class="method method-post">POST</span><span class="path">/vi/interviews</span></div>
+        <div class="endpoint"><span class="method method-post">POST</span><span class="path">/vi/sessions/:id/bulk-invite</span></div>
+      </div>
+
+      <div class="api-card">
+        <div class="step-label">⑥ AI Interview Reports</div>
+        <div class="endpoint"><span class="method method-get">GET</span><span class="path">/vi/sessions/:id/vi-scores</span></div>
+        <div class="endpoint"><span class="method method-get">GET</span><span class="path">/vi/candidates/:id/responses</span></div>
+        <div class="endpoint"><span class="method method-post">POST</span><span class="path">/vi/candidates/:id/evaluate</span></div>
+        <div class="endpoint"><span class="method method-get">GET</span><span class="path">/vi/candidates/:id/report</span></div>
+        <div class="endpoint"><span class="method method-put">PUT</span><span class="path">/sessions/:id/candidates/:scId</span></div>
+      </div>
+
+      <div class="api-card">
+        <div class="step-label">⑦ Final Decision</div>
+        <div class="endpoint"><span class="method method-put">PUT</span><span class="path">/sessions/:id/candidates/:scId</span></div>
+        <div class="endpoint"><span class="step-label" style="font-size:10px;color:#475569;padding:0">Fields: decision · interview_level · email_sent</span></div>
+      </div>
+
+      <div class="api-card">
+        <div class="step-label">⑧ Pipeline Tracker</div>
+        <div class="endpoint"><span class="method method-put">PUT</span><span class="path">/sessions/:id/candidates/:scId</span></div>
+        <div class="endpoint"><span class="step-label" style="font-size:10px;color:#475569;padding:0">Fields: pipeline_status · interview_level · pipeline_feedback</span></div>
+        <div class="endpoint"><span class="method method-post">POST</span><span class="path">/pofu</span></div>
+      </div>
+
+      <div class="api-card">
+        <div class="step-label">POFU — Post-Offer Follow-Up</div>
+        <div class="endpoint"><span class="method method-get">GET</span><span class="path">/pofu</span></div>
+        <div class="endpoint"><span class="method method-put">PUT</span><span class="path">/pofu/:id</span></div>
+        <div class="endpoint"><span class="method method-post">POST</span><span class="path">/pofu/:id/send-email</span></div>
+        <div class="endpoint"><span class="method method-post">POST</span><span class="path">/pofu/:id/log-reply</span></div>
+        <div class="endpoint"><span class="step-label" style="font-size:10px;color:#475569;padding:0">Auto-scheduler: processCandidate() every cycle</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+    });
+  </script>
+</body>
+</html>

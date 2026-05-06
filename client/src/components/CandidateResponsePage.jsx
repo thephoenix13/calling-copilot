@@ -53,8 +53,8 @@ export default function CandidateResponsePage() {
       <div className="crp-card">
         {/* Logo */}
         <div className="crp-logo">
-          <div className="crp-logo-mark">R</div>
-          <span className="crp-logo-text">RecruiterOS</span>
+          <div className="crp-logo-mark">Z</div>
+          <span className="crp-logo-text">Zeople</span>
         </div>
 
         {state === 'loading' && (

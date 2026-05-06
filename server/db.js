@@ -386,6 +386,12 @@ try { db.exec('ALTER TABLE jobs ADD COLUMN qualification_qa TEXT'); } catch (_) 
 try { db.exec('ALTER TABLE jd_enhancements ADD COLUMN job_id INTEGER REFERENCES jobs(id)'); } catch (_) {}
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_jde_job ON jd_enhancements(job_id)'); } catch (_) {}
 
+// Interview scheduling
+try { db.exec('ALTER TABLE session_candidates ADD COLUMN interview_scheduled_at TEXT'); } catch (_) {}
+
+// Selection timestamp for time-to-hire analytics
+try { db.exec('ALTER TABLE session_candidates ADD COLUMN selected_at TEXT'); } catch (_) {}
+
 // Migration: candidate interaction columns on pofu_emails
 try { db.exec('ALTER TABLE pofu_emails ADD COLUMN response_token TEXT'); } catch (_) {}
 try { db.exec('ALTER TABLE pofu_emails ADD COLUMN response_options TEXT'); } catch (_) {}

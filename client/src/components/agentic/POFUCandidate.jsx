@@ -182,6 +182,7 @@ export default function POFUCandidate({ candidateId, authFetch, isLight, onToggl
 
   return (
     <div className="page-content page-content--wide">
+      <div className="ag-module-body">
       <div className="sw-session-breadcrumb" style={{ marginBottom: 20 }}>
         <button className="sw-back-link" onClick={onBack}>← POFU List</button>
         <span className="sw-session-crumb-name">{candidate.candidate_name}</span>
@@ -193,13 +194,16 @@ export default function POFUCandidate({ candidateId, authFetch, isLight, onToggl
         <div className="pofu-cand-left">
           {/* Profile card */}
           <div className="pofu-cand-card">
-            <div className="pofu-cand-meta">
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-1)', marginBottom: 4 }}>
+              {candidate.candidate_name}
+            </div>
+            <div className="pofu-cand-meta" style={{ marginBottom: 12 }}>
               {candidate.role_title && <span className="pofu-cand-role">{candidate.role_title}</span>}
               {candidate.company_name && <span className="pofu-cand-company">@ {candidate.company_name}</span>}
             </div>
-            <div style={{ margin: '12px 0', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
               <RiskBadge level={candidate.risk_level} score={candidate.risk_score} />
-              <span className="pofu-state-badge" style={{ fontSize: 12 }}>
+              <span className="pofu-state-badge">
                 {STATE_OPTIONS.find(s => s.value === candidate.state)?.label || candidate.state}
               </span>
             </div>
@@ -278,7 +282,11 @@ export default function POFUCandidate({ candidateId, authFetch, isLight, onToggl
           {/* Email timeline */}
           <div className="pofu-cand-section-title">Email History ({emails.length})</div>
           {emails.length === 0 ? (
-            <div className="ag-empty" style={{ marginTop: 12 }}>No emails sent yet. The scheduler will trigger the first one automatically.</div>
+            <div className="pofu-email-empty">
+              <div className="pofu-email-empty-icon">✉</div>
+              <div className="pofu-email-empty-title">No emails sent yet</div>
+              <div className="pofu-email-empty-sub">The scheduler will send the first email automatically based on the candidate's stage and risk level. You can also send one manually using the button above.</div>
+            </div>
           ) : (
             <div className="pofu-email-list">
               {emails.map(em => (
@@ -324,12 +332,14 @@ export default function POFUCandidate({ candidateId, authFetch, isLight, onToggl
           )}
         </div>
       </div>
+      </div>
 
       {/* Preview / Send email modal */}
       {previewOpen && (
         <div className="ag-modal-overlay" onClick={() => setPreviewOpen(false)}>
-          <div className="ag-modal" style={{ width: 560 }} onClick={e => e.stopPropagation()}>
+          <div className="ag-modal pofu-send-modal" onClick={e => e.stopPropagation()}>
             <h3 className="ag-modal-title">Send Email</h3>
+
             <div style={{ marginBottom: 12 }}>
               <label className="pofu-cand-label">Email Type</label>
               <select className="ag-input" value={previewTrigger} onChange={e => { setPreviewTrigger(e.target.value); setPreviewData(null); }}>
@@ -338,20 +348,23 @@ export default function POFUCandidate({ candidateId, authFetch, isLight, onToggl
                 ))}
               </select>
             </div>
-            <button className="ag-btn ag-btn--ghost" onClick={handlePreview} disabled={previewLoading} style={{ marginBottom: 16 }}>
-              {previewLoading ? 'Generating…' : '🔍 Preview AI Draft'}
+
+            <button className="ag-btn ag-btn--ghost" onClick={handlePreview} disabled={previewLoading} style={{ width: '100%', marginBottom: 16 }}>
+              {previewLoading ? '⟳ Generating draft…' : '🔍 Preview AI Draft'}
             </button>
 
             {previewData && (
-              <div style={{ background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: 8, padding: 16, marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', marginBottom: 8 }}>{previewData.subject}</div>
-                <pre style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'pre-wrap', margin: 0 }}>{previewData.body}</pre>
+              <div className="pofu-email-preview-box">
+                <div className="pofu-email-preview-subject">{previewData.subject}</div>
+                <div className="pofu-email-preview-scroll">
+                  <pre className="pofu-email-preview-body">{previewData.body}</pre>
+                </div>
               </div>
             )}
 
             {sendMsg && <div style={{ fontSize: 13, color: '#f87171', marginBottom: 8 }}>{sendMsg}</div>}
 
-            <div className="ag-modal-actions">
+            <div className="ag-modal-actions" style={{ borderTop: previewData ? '1px solid var(--border-subtle)' : 'none', paddingTop: previewData ? 16 : 0, marginTop: previewData ? 4 : 0 }}>
               <button className="ag-btn ag-btn--ghost" onClick={() => { setPreviewOpen(false); setPreviewData(null); }}>Cancel</button>
               <button className="ag-btn ag-btn--primary" onClick={handleSend} disabled={!previewData || sending}>
                 {sending ? 'Sending…' : 'Send Now'}

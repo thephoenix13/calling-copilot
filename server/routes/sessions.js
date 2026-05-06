@@ -301,6 +301,7 @@ router.put('/:id/candidates/:candidateId', (req, res) => {
     'decision', 'interview_level',
     'email_sent', 'pipeline_status', 'pipeline_feedback',
     'resume_score', 'vi_review', 'assessment_type',
+    'interview_scheduled_at',
   ];
 
   const sets   = [];
@@ -314,6 +315,15 @@ router.put('/:id/candidates/:candidateId', (req, res) => {
       } else {
         values.push(req.body[field]);
       }
+    }
+  }
+
+  // Auto-timestamp first selection (for time-to-hire analytics)
+  if (req.body.pipeline_status === 'selected') {
+    const cur = db.prepare('SELECT pipeline_status, selected_at FROM session_candidates WHERE id = ?').get(scRow.id);
+    if (cur && cur.pipeline_status !== 'selected' && !cur.selected_at) {
+      sets.push('selected_at = ?');
+      values.push(new Date().toISOString().slice(0, 19).replace('T', ' '));
     }
   }
 

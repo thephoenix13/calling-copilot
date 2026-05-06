@@ -9,41 +9,50 @@ const { sendEmail } = require('../utils/mailer');
 // ── Public: candidate respond endpoints (no auth) ────────────────────────────
 
 router.get('/respond/:token', (req, res) => {
-  const email = db.prepare(
-    'SELECT pe.*, pc.candidate_name, pc.role_title, pc.company_name FROM pofu_emails pe JOIN pofu_candidates pc ON pc.id = pe.pofu_candidate_id WHERE pe.response_token = ?'
-  ).get(req.params.token);
-  if (!email) return res.status(404).json({ error: 'Link not found or expired.' });
-  if (email.responded_at) return res.json({ alreadyResponded: true, candidate_name: email.candidate_name });
-  res.json({
-    candidate_name: email.candidate_name,
-    role_title:     email.role_title,
-    company_name:   email.company_name,
-    subject:        email.subject,
-    options:        email.response_options ? JSON.parse(email.response_options) : [],
-  });
+  try {
+    const email = db.prepare(
+      'SELECT pe.*, pc.candidate_name, pc.role_title, pc.company_name FROM pofu_emails pe JOIN pofu_candidates pc ON pc.id = pe.pofu_candidate_id WHERE pe.response_token = ?'
+    ).get(req.params.token);
+    if (!email) return res.status(404).json({ error: 'Link not found or expired.' });
+    if (email.responded_at) return res.json({ alreadyResponded: true, candidate_name: email.candidate_name });
+    res.json({
+      candidate_name: email.candidate_name,
+      role_title:     email.role_title,
+      company_name:   email.company_name,
+      subject:        email.subject,
+      options:        email.response_options ? JSON.parse(email.response_options) : [],
+    });
+  } catch (err) {
+    console.error('[POFU respond GET]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
 });
 
 router.post('/respond/:token', (req, res) => {
-  const email = db.prepare(
-    'SELECT pe.*, pc.id AS candidate_db_id FROM pofu_emails pe JOIN pofu_candidates pc ON pc.id = pe.pofu_candidate_id WHERE pe.response_token = ?'
-  ).get(req.params.token);
-  if (!email) return res.status(404).json({ error: 'Link not found or expired.' });
-  if (email.responded_at) return res.status(409).json({ error: 'Already responded.' });
+  try {
+    const email = db.prepare(
+      'SELECT pe.*, pc.id AS candidate_db_id FROM pofu_emails pe JOIN pofu_candidates pc ON pc.id = pe.pofu_candidate_id WHERE pe.response_token = ?'
+    ).get(req.params.token);
+    if (!email) return res.status(404).json({ error: 'Link not found or expired.' });
+    if (email.responded_at) return res.status(409).json({ error: 'Already responded.' });
 
-  const { response } = req.body;
-  if (!response?.trim()) return res.status(400).json({ error: 'response is required.' });
+    const { response } = req.body;
+    if (!response?.trim()) return res.status(400).json({ error: 'response is required.' });
 
-  const now = new Date().toISOString();
-  db.prepare('UPDATE pofu_emails SET candidate_response = ?, responded_at = ? WHERE id = ?')
-    .run(response.trim(), now, email.id);
-  db.prepare('UPDATE pofu_candidates SET last_response_at = ?, updated_at = datetime("now") WHERE id = ?')
-    .run(now, email.candidate_db_id);
+    const now = new Date().toISOString();
+    db.prepare('UPDATE pofu_emails SET candidate_response = ?, responded_at = ? WHERE id = ?')
+      .run(response.trim(), now, email.id);
+    db.prepare('UPDATE pofu_candidates SET last_response_at = ?, updated_at = datetime("now") WHERE id = ?')
+      .run(now, email.candidate_db_id);
 
-  // Log as inbound email entry
-  db.prepare(`INSERT INTO pofu_emails (pofu_candidate_id, direction, trigger_reason, body, ai_generated, sent_at) VALUES (?, 'inbound', 'candidate_reply', ?, 0, ?)`)
-    .run(email.candidate_db_id, response.trim(), now);
+    db.prepare(`INSERT INTO pofu_emails (pofu_candidate_id, direction, trigger_reason, body, ai_generated, sent_at) VALUES (?, 'inbound', 'candidate_reply', ?, 0, ?)`)
+      .run(email.candidate_db_id, response.trim(), now);
 
-  res.json({ ok: true });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[POFU respond POST]', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
 });
 
 router.use(auth);

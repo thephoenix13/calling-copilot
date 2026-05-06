@@ -42,7 +42,7 @@ export default function Dashboard({ displayName, onSelect, onLogout, isLight, on
       <header className="app-header">
         <div className="header-left">
           <span className="logo">📞</span>
-          <h1>Recruiter CoPilot</h1>
+          <h1>Zeople</h1>
         </div>
         <div className="header-right">
           <button className="theme-toggle-btn" onClick={onToggleTheme}>

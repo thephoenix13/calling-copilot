@@ -472,14 +472,21 @@ export default function CandidatesModule({ authFetch, isLight, onToggleTheme, on
     }
   };
 
-  const pageHeader = null;
+  const pageHeader = (
+    <div className="ag-page-header">
+      <div>
+        <h1 className="ag-page-title">Candidate Database</h1>
+        <p className="ag-page-subtitle">Search, review, and manage your candidate pool</p>
+      </div>
+    </div>
+  );
 
   // ── Profile view ──
   if (view === 'profile' && selected) {
     return (
-      <div className="page-content">
-        {pageHeader}
+      <div className="page-content page-content--wide">
         <div className="ag-module-body">
+          {pageHeader}
           <CandidateProfile
             candidate={selected}
             onBack={() => { setView('list'); setSelected(null); }}
@@ -493,9 +500,9 @@ export default function CandidatesModule({ authFetch, isLight, onToggleTheme, on
   // ── Form view ──
   if (view === 'form') {
     return (
-      <div className="page-content">
-        {pageHeader}
+      <div className="page-content page-content--wide">
         <div className="ag-module-body">
+          {pageHeader}
           <CandidateForm
             candidate={selected}
             authFetch={authFetch}
@@ -509,9 +516,9 @@ export default function CandidatesModule({ authFetch, isLight, onToggleTheme, on
 
   // ── List view ──
   return (
-    <div className="page-content">
-      {pageHeader}
+    <div className="page-content page-content--wide">
       <div className="ag-module-body">
+        {pageHeader}
         <div className="ag-toolbar">
           <input
             className="ag-search ag-search--wide"

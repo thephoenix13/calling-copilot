@@ -271,6 +271,12 @@ export default function Step2_EnhanceJD({ session, authFetch, onComplete }) {
   // ── Qualify & Refresh ──────────────────────────────────────────────────────
   const handleQualifyAndRefresh = useCallback(async () => {
     setQualifying(true);
+    setView('loading');
+    setLoadingStep(0);
+
+    const timer = setInterval(() => setLoadingStep(s => Math.min(s + 1, LOADING_STEPS.length - 1)), 7000);
+
+    // Build Q&A notes from all saved responses
     const parsed = tryParse(results.clarificationQuestions);
     const qaLines = [];
     if (parsed) {
@@ -287,6 +293,7 @@ export default function Step2_EnhanceJD({ session, authFetch, onComplete }) {
     }
     const qaNotes = qaLines.length > 0 ? `Qualification Call Q&A:\n${qaLines.join('\n')}` : '';
     const combinedNotes = [clientNotes, qaNotes].filter(Boolean).join('\n\n');
+
     try {
       const res = await authFetch(`${BACKEND_URL}/enhance-jd`, {
         method: 'POST',
@@ -299,17 +306,49 @@ export default function Step2_EnhanceJD({ session, authFetch, onComplete }) {
       });
       if (!res.ok) throw new Error('Refresh failed.');
       const data = await res.json();
-      setResults(r => ({ ...r, ...data }));
-      setQualified(true);
-      if (session.job_id) {
-        await authFetch(`${BACKEND_URL}/jobs/${session.job_id}/qualify`, { method: 'PATCH' }).catch(() => {});
+
+      // Bake saved responses back into the regenerated clarification questions
+      // so answers are preserved in the display after refresh
+      const newCQ = tryParse(data.clarificationQuestions);
+      if (newCQ && typeof newCQ === 'object') {
+        Object.keys(newCQ).forEach(key => {
+          if (Array.isArray(newCQ[key])) {
+            newCQ[key] = newCQ[key].map((q, i) => ({
+              ...q,
+              response: clarSavedResponses[key]?.[i]?.trim() || q.response || '',
+            }));
+          }
+        });
+        data.clarificationQuestions = newCQ;
       }
+
+      const refreshed = { ...results, ...data };
+      setResults(refreshed);
+      setQualified(true);
+
+      // Auto-save refreshed assets to the session so they persist
+      if (session.id) {
+        authFetch(`${BACKEND_URL}/sessions/${session.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enhancement_data: refreshed, enhancement_saved: 1 }),
+        }).catch(() => {});
+      }
+
+      if (session.job_id) {
+        authFetch(`${BACKEND_URL}/jobs/${session.job_id}/qualify`, { method: 'PATCH' }).catch(() => {});
+      }
+
+      setView('results');
+      setActiveTab('jd'); // land on Formatted JD to show the refreshed output
     } catch (err) {
       console.error('qualify error:', err);
+      setView('results');
     } finally {
+      clearInterval(timer);
       setQualifying(false);
     }
-  }, [parsedJob, clientNotes, companyScript, results.clarificationQuestions, clarSavedResponses, session.job_id, authFetch]);
+  }, [parsedJob, clientNotes, companyScript, results, clarSavedResponses, session.id, session.job_id, authFetch]);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const activeTabObj  = TABS.find(t => t.key === activeTab);
@@ -330,7 +369,7 @@ export default function Step2_EnhanceJD({ session, authFetch, onComplete }) {
                 <div key={i} className={`jde-dot${loadingStep > i ? ' jde-dot--done' : loadingStep === i + 1 ? ' jde-dot--active' : ''}`} />
               ))}
             </div>
-            <p className="jde-loading-hint">Generating 5 recruitment assets — ~40–60 seconds.</p>
+            <p className="jde-loading-hint">{qualifying ? 'Refreshing all assets with qualification responses — ~40–60 seconds.' : 'Generating 5 recruitment assets — ~40–60 seconds.'}</p>
           </div>
         </div>
       </div>
@@ -384,7 +423,7 @@ export default function Step2_EnhanceJD({ session, authFetch, onComplete }) {
                   className="ag-textarea"
                   value={companyScript}
                   onChange={e => setCompanyScript(e.target.value)}
-                  placeholder="e.g., 'Hi, I'm reaching out from RecruiterOS, a recruitment firm specialising in tech roles across India…'"
+                  placeholder="e.g., 'Hi, I'm reaching out from Zeople, a recruitment firm specialising in tech roles across India…'"
                   rows={4}
                 />
               </div>

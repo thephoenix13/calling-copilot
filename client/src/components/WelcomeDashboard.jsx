@@ -170,21 +170,21 @@ export default function WelcomeDashboard({ displayName, onNavigate, authFetch })
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <div className="wd-hero">
         <h1 className="wd-greeting">{greeting}, {firstName}.</h1>
-        <p className="wd-subtitle">Welcome to RecruiterOS — your AI-powered recruiting platform.</p>
+        <p className="wd-subtitle">Welcome to Zeople — RecruiterOS, your AI-powered recruiting platform.</p>
       </div>
 
       {/* ── Live stats strip ─────────────────────────────────────────────── */}
       <div className="wd-stats-strip">
-        <div className="wd-stat-card">
-          <span className="wd-stat-value">{stats.jobs ?? '—'}</span>
+        <div className="wd-stat-card wd-stat-card--orange">
+          <span className="wd-stat-value wd-stat-value--orange">{stats.jobs ?? '—'}</span>
           <span className="wd-stat-label">Active Jobs</span>
         </div>
-        <div className="wd-stat-card">
-          <span className="wd-stat-value">{stats.candidates ?? '—'}</span>
+        <div className="wd-stat-card wd-stat-card--blue">
+          <span className="wd-stat-value wd-stat-value--blue">{stats.candidates ?? '—'}</span>
           <span className="wd-stat-label">Candidates</span>
         </div>
-        <div className="wd-stat-card">
-          <span className="wd-stat-value">{stats.sessions ?? '—'}</span>
+        <div className="wd-stat-card wd-stat-card--green">
+          <span className="wd-stat-value wd-stat-value--green">{stats.sessions ?? '—'}</span>
           <span className="wd-stat-label">Pipeline Sessions</span>
         </div>
       </div>

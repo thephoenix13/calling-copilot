@@ -6182,6 +6182,223 @@ body {
 .rpt-competency-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
 .rpt-comp-item  { display: flex; flex-direction: column; gap: 6px; }
 .rpt-comp-header { display: flex; justify-content: space-between; align-items: baseline; }
+
+/* ── Interview Scheduler — Step 6 ─────────────────────────────────────────── */
+.sw-schedule-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.sw-schedule-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.sw-schedule-input {
+  font-size: 12px;
+  padding: 4px 8px;
+  height: 30px;
+  min-width: 180px;
+  flex: 1;
+  max-width: 220px;
+}
+.sw-schedule-saved {
+  font-size: 11px;
+  color: var(--text-3);
+  background: var(--bg-sunken);
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+
+/* ── Interview Scheduler — Step 7 kanban cards ────────────────────────────── */
+.sw-card-schedule-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.sw-card-schedule-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.sw-card-schedule-val {
+  font-size: 11px;
+  color: var(--text-3);
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+  line-height: 1.5;
+}
+.sw-card-schedule-val:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.sw-card-schedule-val--set {
+  border-style: solid;
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.sw-card-schedule-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+.sw-card-schedule-input {
+  font-size: 11px;
+  padding: 2px 6px;
+  height: 26px;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-1);
+}
+.sw-card-sched-confirm,
+.sw-card-sched-cancel {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+.sw-card-sched-confirm { color: #10b981; }
+.sw-card-sched-confirm:hover { background: rgba(16,185,129,.1); }
+.sw-card-sched-cancel  { color: #f87171; }
+.sw-card-sched-cancel:hover  { background: rgba(248,113,113,.1); }
+
+/* ── Efficiency tab — conversion funnel ───────────────────────────────────── */
+.rpt-conv-funnel { display: flex; flex-direction: column; gap: 10px; }
+
+.rpt-conv-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 160px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  transition: background .15s;
+}
+.rpt-conv-row:hover { background: var(--bg-sunken); }
+.rpt-conv-row--bottleneck { background: rgba(248,113,113,.06); border: 1px solid rgba(248,113,113,.2); }
+
+.rpt-conv-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+}
+.rpt-conv-bar-wrap {
+  height: 28px;
+  background: var(--bg-sunken);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.rpt-conv-bar {
+  height: 100%;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  min-width: 32px;
+  transition: width .4s ease;
+}
+.rpt-conv-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+}
+.rpt-conv-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+.rpt-conv-rate {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--emerald);
+}
+.rpt-conv-rate--base  { color: var(--text-3); font-weight: 400; }
+.rpt-conv-rate--warn  { color: #f87171; }
+.rpt-conv-drop {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ── Efficiency tab — performance KPIs ───────────────────────────────────── */
+.rpt-perf-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 8px 0;
+}
+.rpt-perf-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 8px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-subtle);
+}
+.rpt-perf-val {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+.rpt-perf-lbl {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.rpt-perf-sub {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ── Assessments tab ─────────────────────────────────────────────────────── */
+.rpt-assess-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+/* ── Days open badge in jobs table ───────────────────────────────────────── */
+.rpt-days-open {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--emerald);
+}
+.rpt-days-open--warn { color: #f59e0b; }
+
+/* ── Jobs table — unlinked + totals rows ─────────────────────────────────── */
+.rpt-jobs-row--unlinked td { background: var(--bg-sunken); opacity: .75; }
+.rpt-jobs-row--unlinked:hover td { opacity: 1; }
+
+.rpt-jobs-row--total td {
+  background: var(--bg-elevated);
+  border-top: 2px solid var(--border);
+  font-size: 13px;
+  padding: 10px 12px;
+}
+.rpt-jobs-row--total .rpt-td-num { color: var(--text-1); }
 .rpt-comp-label  { font-size: 12px; color: var(--text-2); }
 .rpt-comp-score  { font-size: 13px; font-weight: 700; color: var(--text-1); }
 .rpt-comp-track  { height: 8px; background: var(--bg-elevated); border-radius: 99px; overflow: hidden; }

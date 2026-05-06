@@ -143,6 +143,118 @@ router.get('/summary', (req, res) => {
   const jobStatus = {};
   jobStatusRows.forEach(r => { jobStatus[r.status] = r.c; });
 
+  // ── Timing metrics ────────────────────────────────────────────────────────
+  const timingRow = db.prepare(`
+    SELECT
+      AVG(julianday(sc.selected_at) - julianday(sc.added_at))                            AS avg_time_to_hire,
+      AVG(CASE WHEN sc.vi_invite_sent_at IS NOT NULL
+          THEN julianday(sc.vi_invite_sent_at) - julianday(sc.added_at) END)              AS avg_sourcing_to_vi,
+      AVG(CASE WHEN sc.selected_at IS NOT NULL AND sc.vi_invite_sent_at IS NOT NULL
+          THEN julianday(sc.selected_at) - julianday(sc.vi_invite_sent_at) END)           AS avg_vi_to_selected
+    FROM session_candidates sc
+    JOIN sessions s ON s.id = sc.session_id
+    WHERE s.user_id = ? AND sc.selected_at IS NOT NULL
+  `).get(uid);
+
+  const timing = {
+    avgTimeToHire:   timingRow.avg_time_to_hire   != null ? Math.round(timingRow.avg_time_to_hire)   : null,
+    avgSourcingToVI: timingRow.avg_sourcing_to_vi != null ? Math.round(timingRow.avg_sourcing_to_vi) : null,
+    avgVIToSelected: timingRow.avg_vi_to_selected != null ? Math.round(timingRow.avg_vi_to_selected) : null,
+  };
+
+  // ── Stage conversion rates ────────────────────────────────────────────────
+  const conversions = {
+    sourcedToScreened:   funnel.sourced    > 0 ? Math.round(funnel.screenPass / funnel.sourced    * 100) : null,
+    screenedToVI:        funnel.screenPass > 0 ? Math.round(funnel.viInvited  / funnel.screenPass * 100) : null,
+    viToProceeded:       funnel.viInvited  > 0 ? Math.round(funnel.proceeded  / funnel.viInvited  * 100) : null,
+    proceededToSelected: funnel.proceeded  > 0 ? Math.round(funnel.selected   / funnel.proceeded  * 100) : null,
+  };
+
+  // ── Session activity (last 25) ────────────────────────────────────────────
+  const sessionActivity = db.prepare(`
+    SELECT s.id, COALESCE(s.name, 'Unnamed Session') AS name, s.created_at,
+           j.title AS job_title, j.client_name,
+           COUNT(sc.id)                                                              AS sourced,
+           SUM(CASE WHEN sc.screening_status='pass'    THEN 1 ELSE 0 END)           AS passed,
+           SUM(CASE WHEN sc.decision='proceed'         THEN 1 ELSE 0 END)           AS proceeded,
+           SUM(CASE WHEN sc.pipeline_status='selected' THEN 1 ELSE 0 END)           AS selected,
+           ROUND(AVG(CASE WHEN sc.selected_at IS NOT NULL
+               THEN julianday(sc.selected_at) - julianday(sc.added_at) END))        AS avg_days
+    FROM sessions s
+    LEFT JOIN session_candidates sc ON sc.session_id = s.id
+    LEFT JOIN jobs j ON j.id = s.job_id
+    WHERE s.user_id = ?
+    GROUP BY s.id
+    ORDER BY s.created_at DESC
+    LIMIT 25
+  `).all(uid);
+
+  // ── Assessment analytics ──────────────────────────────────────────────────
+  const mcqRow = db.prepare(`
+    SELECT
+      COUNT(DISTINCT a.id)                                                                    AS total_assessments,
+      COUNT(ai.id)                                                                            AS total_invited,
+      SUM(CASE WHEN ai.status='completed' THEN 1 ELSE 0 END)                                  AS completed,
+      AVG(asub.score)                                                                         AS avg_score,
+      SUM(CASE WHEN asub.score IS NOT NULL AND asub.score >= a.pass_score THEN 1 ELSE 0 END)  AS passed_count,
+      COUNT(asub.id)                                                                          AS total_scored,
+      AVG(asub.time_taken_sec)                                                                AS avg_time_sec
+    FROM assessments a
+    LEFT JOIN assessment_invites ai ON ai.assessment_id = a.id
+    LEFT JOIN assessment_submissions asub ON asub.invite_id = ai.id
+    WHERE a.user_id = ?
+  `).get(uid);
+
+  const mcqScoreRows = db.prepare(`
+    SELECT asub.score FROM assessment_submissions asub
+    JOIN assessments a ON a.id = asub.assessment_id
+    WHERE a.user_id = ? AND asub.score IS NOT NULL
+  `).all(uid);
+
+  const codingRow = db.prepare(`
+    SELECT
+      COUNT(DISTINCT ca.id)                                                                    AS total_assessments,
+      COUNT(ci.id)                                                                             AS total_invited,
+      SUM(CASE WHEN ci.status='completed' THEN 1 ELSE 0 END)                                  AS completed,
+      AVG(csub.score)                                                                         AS avg_score,
+      SUM(CASE WHEN csub.score IS NOT NULL AND csub.score >= ca.pass_score THEN 1 ELSE 0 END) AS passed_count,
+      COUNT(csub.id)                                                                          AS total_scored,
+      AVG(csub.time_taken_sec)                                                                AS avg_time_sec
+    FROM coding_assessments ca
+    LEFT JOIN coding_invites ci ON ci.assessment_id = ca.id
+    LEFT JOIN coding_submissions csub ON csub.invite_id = ci.id
+    WHERE ca.user_id = ?
+  `).get(uid);
+
+  const codingScoreRows = db.prepare(`
+    SELECT csub.score FROM coding_submissions csub
+    JOIN coding_assessments ca ON ca.id = csub.assessment_id
+    WHERE ca.user_id = ? AND csub.score IS NOT NULL
+  `).all(uid);
+
+  const assessments = {
+    mcq: {
+      totalAssessments: mcqRow.total_assessments || 0,
+      totalInvited:     mcqRow.total_invited     || 0,
+      completed:        mcqRow.completed         || 0,
+      avgScore:         mcqRow.avg_score         != null ? Math.round(mcqRow.avg_score)    : null,
+      passedCount:      mcqRow.passed_count      || 0,
+      totalScored:      mcqRow.total_scored      || 0,
+      avgTimeSec:       mcqRow.avg_time_sec      != null ? Math.round(mcqRow.avg_time_sec) : null,
+      scoreBuckets:     toBucket(mcqScoreRows, 'score'),
+    },
+    coding: {
+      totalAssessments: codingRow.total_assessments || 0,
+      totalInvited:     codingRow.total_invited     || 0,
+      completed:        codingRow.completed         || 0,
+      avgScore:         codingRow.avg_score         != null ? Math.round(codingRow.avg_score)    : null,
+      passedCount:      codingRow.passed_count      || 0,
+      totalScored:      codingRow.total_scored      || 0,
+      avgTimeSec:       codingRow.avg_time_sec      != null ? Math.round(codingRow.avg_time_sec) : null,
+      scoreBuckets:     toBucket(codingScoreRows, 'score'),
+    },
+  };
+
   res.json({
     overview: { activeJobs, totalJobs, totalCandidates, totalSessions, totalVI, totalPofu,
       calls: { total: callStats.total || 0, completed: callStats.completed || 0,
@@ -153,6 +265,10 @@ router.get('/summary', (req, res) => {
              avgCompetency, totalEvaluated: evalAll.filter(r => r.overall_score != null).length },
     pofu:  { stateCounts, riskCounts, avgRisk, emailCounts, total: pofuAll.length },
     jobs:  { status: jobStatus },
+    timing,
+    conversions,
+    activity: { sessions: sessionActivity },
+    assessments,
   });
 });
 
@@ -161,10 +277,18 @@ router.get('/jobs', (req, res) => {
   try {
     const uid = req.user.id;
 
-    // Fetch jobs
-    const jobs = db.prepare(
-      'SELECT id, title, client_name, department, location, status, openings_count, required_skills, preferred_skills, created_at FROM jobs WHERE user_id = ? ORDER BY created_at DESC'
-    ).all(uid);
+    // Fetch jobs: own jobs + any job referenced by the user's sessions
+    const jobs = db.prepare(`
+      SELECT DISTINCT j.id, j.title, j.client_name, j.department, j.location,
+             j.status, j.openings_count, j.required_skills, j.preferred_skills, j.created_at
+      FROM jobs j
+      WHERE j.user_id = ?
+         OR j.id IN (
+           SELECT DISTINCT s.job_id FROM sessions s
+           WHERE s.user_id = ? AND s.job_id IS NOT NULL
+         )
+      ORDER BY j.created_at DESC
+    `).all(uid, uid);
 
     // Aggregate session_candidates per job via sessions.job_id
     const scAgg = db.prepare(`
@@ -195,6 +319,26 @@ router.get('/jobs', (req, res) => {
     const pofuMap = {};
     pofuAgg.forEach(r => { pofuMap[r.job_id] = r.pofu_count; });
 
+    // Candidates from sessions NOT linked to any job — keep totals consistent with summary
+    const unlinkedRow = db.prepare(`
+      SELECT
+        COUNT(sc.id)                                                         AS sourced,
+        SUM(CASE WHEN sc.screening_status = 'pass'     THEN 1 ELSE 0 END)  AS passed,
+        SUM(CASE WHEN sc.decision         = 'proceed'  THEN 1 ELSE 0 END)  AS proceeded,
+        SUM(CASE WHEN sc.pipeline_status  = 'selected' THEN 1 ELSE 0 END)  AS selected
+      FROM session_candidates sc
+      JOIN sessions s ON s.id = sc.session_id
+      WHERE s.user_id = ? AND s.job_id IS NULL
+    `).get(uid);
+
+    const unlinked = (unlinkedRow.sourced > 0) ? {
+      sourced:   unlinkedRow.sourced,
+      passed:    unlinkedRow.passed,
+      proceeded: unlinkedRow.proceeded,
+      selected:  unlinkedRow.selected,
+      pass_rate: unlinkedRow.sourced > 0 ? Math.round(unlinkedRow.passed / unlinkedRow.sourced * 100) : null,
+    } : null;
+
     res.json({
       jobs: jobs.map(j => {
         const sc = scMap[j.id] || { sourced: 0, passed: 0, proceeded: 0, selected: 0 };
@@ -209,8 +353,10 @@ router.get('/jobs', (req, res) => {
           vi_count:   viMap[j.id]   || 0,
           pofu_count: pofuMap[j.id] || 0,
           pass_rate:  sc.sourced > 0 ? Math.round(sc.passed / sc.sourced * 100) : null,
+          time_open:  Math.round((Date.now() - new Date(j.created_at).getTime()) / 86400000),
         };
       }),
+      unlinked,
     });
   } catch (err) {
     console.error('[reports/jobs]', err);
@@ -224,8 +370,13 @@ router.get('/jobs/:jobId', (req, res) => {
   const uid = req.user.id;
   const jid = req.params.jobId;
 
-  const job = db.prepare('SELECT * FROM jobs WHERE id=? AND user_id=?').get(jid, uid);
-  if (!job) return res.status(404).json({ error: 'Job not found.' });
+  // Allow access if user owns the job OR has sessions linked to it
+  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(jid);
+  const hasAccess = job && (
+    job.user_id === uid ||
+    db.prepare('SELECT id FROM sessions WHERE user_id=? AND job_id=?').get(uid, jid)
+  );
+  if (!hasAccess) return res.status(404).json({ error: 'Job not found.' });
 
   // All session_candidates across all sessions for this job
   const scRows = db.prepare(`
@@ -328,6 +479,125 @@ router.get('/jobs/:jobId', (req, res) => {
   });
   } catch (err) {
     console.error('[reports/jobs/:jobId]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /reports/details — row-level data backing all aggregate tabs ──────────
+router.get('/details', (req, res) => {
+  try {
+    const uid = req.user.id;
+
+    // All pipeline candidates across every session
+    const candidates = db.prepare(`
+      SELECT
+        c.name            AS candidate_name,
+        c.email           AS candidate_email,
+        c.current_title   AS candidate_title,
+        c.experience_years,
+        sc.screening_status,
+        sc.ai_interview_score,
+        sc.match_percentage,
+        sc.decision,
+        sc.interview_level,
+        sc.pipeline_status,
+        sc.added_at,
+        sc.selected_at,
+        s.name            AS session_name,
+        j.title           AS job_title,
+        j.client_name
+      FROM session_candidates sc
+      JOIN candidates c ON c.id = sc.candidate_id
+      JOIN sessions   s ON s.id = sc.session_id
+      LEFT JOIN jobs  j ON j.id = s.job_id
+      WHERE s.user_id = ?
+      ORDER BY sc.added_at DESC
+      LIMIT 300
+    `).all(uid);
+
+    // MCQ assessment invites + submissions
+    const mcqInvites = db.prepare(`
+      SELECT
+        ai.candidate_name,
+        ai.candidate_email,
+        ai.status,
+        ai.invited_at,
+        ai.completed_at,
+        asub.score,
+        asub.time_taken_sec,
+        a.title      AS assessment_title,
+        a.pass_score
+      FROM assessment_invites ai
+      JOIN assessments a ON a.id = ai.assessment_id
+      LEFT JOIN assessment_submissions asub ON asub.invite_id = ai.id
+      WHERE a.user_id = ?
+      ORDER BY ai.invited_at DESC
+      LIMIT 200
+    `).all(uid);
+
+    // Coding assessment invites + submissions
+    const codingInvites = db.prepare(`
+      SELECT
+        ci.candidate_name,
+        ci.candidate_email,
+        ci.status,
+        ci.invited_at,
+        ci.completed_at,
+        csub.score,
+        csub.time_taken_sec,
+        ca.title      AS assessment_title,
+        ca.pass_score
+      FROM coding_invites ci
+      JOIN coding_assessments ca ON ca.id = ci.assessment_id
+      LEFT JOIN coding_submissions csub ON csub.invite_id = ci.id
+      WHERE ca.user_id = ?
+      ORDER BY ci.invited_at DESC
+      LIMIT 200
+    `).all(uid);
+
+    // Video interview candidates
+    const videoCandidates = db.prepare(`
+      SELECT
+        vc.name                     AS candidate_name,
+        vc.email                    AS candidate_email,
+        vc.status,
+        vc.created_at               AS invited_at,
+        vc.interview_completed_at   AS completed_at,
+        ve.overall_score,
+        ve.hiring_recommendation,
+        vi.title                    AS interview_title,
+        j.title                     AS job_title
+      FROM video_candidates vc
+      JOIN video_interviews vi ON vi.id = vc.interview_id
+      LEFT JOIN video_evaluations ve ON ve.candidate_id = vc.id
+      LEFT JOIN jobs j ON j.id = vi.job_id
+      WHERE vi.user_id = ?
+      ORDER BY vc.created_at DESC
+      LIMIT 200
+    `).all(uid);
+
+    // POFU candidates
+    const pofuCandidates = db.prepare(`
+      SELECT
+        pc.candidate_name,
+        pc.candidate_email,
+        pc.role_title,
+        pc.company_name,
+        pc.state,
+        pc.risk_level,
+        pc.risk_score,
+        pc.doj,
+        pc.created_at,
+        pc.last_email_at
+      FROM pofu_candidates pc
+      WHERE pc.user_id = ?
+      ORDER BY pc.created_at DESC
+      LIMIT 200
+    `).all(uid);
+
+    res.json({ candidates, mcqInvites, codingInvites, videoCandidates, pofuCandidates });
+  } catch (err) {
+    console.error('[reports/details]', err);
     res.status(500).json({ error: err.message });
   }
 });
