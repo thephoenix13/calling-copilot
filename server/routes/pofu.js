@@ -57,25 +57,40 @@ router.post('/respond/:token', (req, res) => {
 
 router.use(auth);
 
+const { requireWrite, requireRead } = require('../middleware/permissions');
+const { visibleUserIds } = require('../utils/scoping');
+router.use(requireRead('pofu.read'));
+router.use(requireWrite('pofu.write'));
+
 function parsePOFU(row) {
   return row;
 }
 
-// GET /pofu — list all POFU candidates for this user
+function inIds(req) {
+  const ids = visibleUserIds(req);
+  return { ids, placeholders: ids.map(() => '?').join(',') || 'NULL' };
+}
+
+// GET /pofu — list POFU candidates. Owners and Team Leads see the company's;
+// everyone else sees only their own.
 router.get('/', (req, res) => {
+  const { ids, placeholders } = inIds(req);
+  if (ids.length === 0) return res.json({ candidates: [] });
   const rows = db.prepare(`
     SELECT * FROM pofu_candidates
-    WHERE user_id = ?
+    WHERE user_id IN (${placeholders})
     ORDER BY
       CASE risk_level WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
       doj ASC
-  `).all(req.user.id);
+  `).all(...ids);
   res.json({ candidates: rows });
 });
 
 // GET /pofu/stats — dashboard summary
 router.get('/stats', (req, res) => {
-  const all     = db.prepare('SELECT * FROM pofu_candidates WHERE user_id = ?').all(req.user.id);
+  const { ids, placeholders } = inIds(req);
+  if (ids.length === 0) return res.json({ total: 0, atRisk: 0, joining: 0, joiningThisWeek: 0 });
+  const all     = db.prepare(`SELECT * FROM pofu_candidates WHERE user_id IN (${placeholders})`).all(...ids);
   const now     = new Date();
   const joiningThisWeek = all.filter(c => {
     if (!c.doj) return false;
@@ -122,10 +137,14 @@ router.post('/', (req, res) => {
   res.status(201).json({ candidate: row });
 });
 
-// GET /pofu/:id — single candidate with email history
+// GET /pofu/:id — single candidate with email history (read access expanded
+// to Owner / Team Lead per visibleUserIds).
 router.get('/:id', (req, res) => {
-  const row = db.prepare('SELECT * FROM pofu_candidates WHERE id = ? AND user_id = ?')
-    .get(req.params.id, req.user.id);
+  const { ids, placeholders } = inIds(req);
+  if (ids.length === 0) return res.status(404).json({ error: 'Not found.' });
+  const row = db.prepare(
+    `SELECT * FROM pofu_candidates WHERE id = ? AND user_id IN (${placeholders})`
+  ).get(req.params.id, ...ids);
   if (!row) return res.status(404).json({ error: 'Not found.' });
 
   const emails = db.prepare(

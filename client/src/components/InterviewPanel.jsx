@@ -89,7 +89,6 @@ export default function InterviewPanel({ transcript, callStatus, initialJd, init
   }, [transcript, currentQuestion, callStatus]);
 
   useEffect(() => {
-    const finalCount = transcript.filter(e => e.isFinal !== false).length;
     // Only trigger when new final Candidate lines appear
     const newCandidateLines = transcript.filter(
       e => e.isFinal !== false && e.speaker === 'Candidate'
@@ -99,10 +98,19 @@ export default function InterviewPanel({ transcript, callStatus, initialJd, init
     lastTranscriptLen.current = newCandidateLines;
 
     if (suggestTimerRef.current) clearTimeout(suggestTimerRef.current);
-    // 2 second debounce so we don't hammer the API mid-sentence
-    suggestTimerRef.current = setTimeout(fetchSuggestions, 2000);
-    return () => clearTimeout(suggestTimerRef.current);
+    // ~1s debounce — long enough to coalesce in-flight chunks,
+    // short enough to fire before the recruiter starts the next question.
+    suggestTimerRef.current = setTimeout(fetchSuggestions, 1000);
+    // No cleanup here on purpose: cleanup runs on EVERY transcript change
+    // (including recruiter typing the next question) which would cancel the
+    // pending fetch. The timer is cleared only when a newer candidate line
+    // arrives or the component unmounts (handled by the unmount-only effect).
   }, [transcript, fetchSuggestions]);
+
+  // Clear any pending timer only when the panel unmounts.
+  useEffect(() => () => {
+    if (suggestTimerRef.current) clearTimeout(suggestTimerRef.current);
+  }, []);
 
   // ── Toggle section collapse ──────────────────────────────────────────────
   const toggleSection = (i) => {

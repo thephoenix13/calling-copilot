@@ -2,8 +2,15 @@ const express = require('express');
 const router  = express.Router();
 const { db }  = require('../db');
 const auth    = require('../middleware/auth');
+const { visibleUserIds } = require('../utils/scoping');
 
 router.use(auth);
+
+// Helper — return SQL `IN (...)` placeholder string + values for visibleUserIds.
+function inSet(req) {
+  const ids = visibleUserIds(req);
+  return { ids, placeholders: ids.length ? ids.map(() => '?').join(',') : 'NULL' };
+}
 
 function parseJSON(raw) {
   if (!raw) return null;
@@ -11,22 +18,41 @@ function parseJSON(raw) {
 }
 
 router.get('/summary', (req, res) => {
-  const uid = req.user.id;
+  // Owners and Team Leads see the company's aggregations; everyone else sees
+  // only their own. Single visibleUserIds() lookup, threaded through all the
+  // sub-queries below as `IN (${ph})`.
+  const { ids, placeholders: ph } = inSet(req);
+  if (ids.length === 0) {
+    return res.json({
+      overview: { activeJobs: 0, totalJobs: 0, totalCandidates: 0, totalSessions: 0, totalVI: 0, totalPofu: 0,
+                  calls: { total: 0, completed: 0, avgDuration: 0 } },
+      funnel: { sourced: 0, screenPass: 0, screenFail: 0, screenPend: 0, viInvited: 0, proceeded: 0, pooled: 0, selected: 0 },
+      screening: { statusBreakdown: { pass: 0, fail: 0, pending: 0 }, scoreBuckets: [], matchBuckets: [], decisions: { proceed: 0, pool: 0 }, viReview: { hold: 0, reject: 0 } },
+      video: { funnel: { total: 0, invited: 0, inProgress: 0, completed: 0, evaluated: 0 }, scoreBuckets: [], recommendations: {}, avgCompetency: {}, totalEvaluated: 0 },
+      pofu:  { stateCounts: {}, riskCounts: { low: 0, medium: 0, high: 0 }, avgRisk: 0, emailCounts: { outbound: 0, inbound: 0 }, total: 0 },
+      jobs: { status: {} },
+      timing: { avgTimeToHire: null, avgSourcingToVI: null, avgVIToSelected: null },
+      conversions: { sourcedToScreened: null, screenedToVI: null, viToProceeded: null, proceededToSelected: null },
+      activity: { sessions: [] },
+      assessments: { mcq: { totalAssessments: 0, totalInvited: 0, completed: 0, avgScore: null, passedCount: 0, totalScored: 0, avgTimeSec: null, scoreBuckets: [] },
+                     coding: { totalAssessments: 0, totalInvited: 0, completed: 0, avgScore: null, passedCount: 0, totalScored: 0, avgTimeSec: null, scoreBuckets: [] } },
+    });
+  }
 
   // ── Overview KPIs ─────────────────────────────────────────────────────────
-  const activeJobs      = db.prepare("SELECT COUNT(*) AS c FROM jobs WHERE user_id=? AND status='active'").get(uid).c;
-  const totalJobs       = db.prepare("SELECT COUNT(*) AS c FROM jobs WHERE user_id=?").get(uid).c;
-  const totalCandidates = db.prepare("SELECT COUNT(*) AS c FROM candidates WHERE user_id=?").get(uid).c;
-  const totalSessions   = db.prepare("SELECT COUNT(*) AS c FROM sessions WHERE user_id=?").get(uid).c;
-  const totalVI         = db.prepare("SELECT COUNT(*) AS c FROM video_interviews WHERE user_id=?").get(uid).c;
-  const totalPofu       = db.prepare("SELECT COUNT(*) AS c FROM pofu_candidates WHERE user_id=?").get(uid).c;
+  const activeJobs      = db.prepare(`SELECT COUNT(*) AS c FROM jobs WHERE user_id IN (${ph}) AND status='active'`).get(...ids).c;
+  const totalJobs       = db.prepare(`SELECT COUNT(*) AS c FROM jobs WHERE user_id IN (${ph})`).get(...ids).c;
+  const totalCandidates = db.prepare(`SELECT COUNT(*) AS c FROM candidates WHERE user_id IN (${ph})`).get(...ids).c;
+  const totalSessions   = db.prepare(`SELECT COUNT(*) AS c FROM sessions WHERE user_id IN (${ph})`).get(...ids).c;
+  const totalVI         = db.prepare(`SELECT COUNT(*) AS c FROM video_interviews WHERE user_id IN (${ph})`).get(...ids).c;
+  const totalPofu       = db.prepare(`SELECT COUNT(*) AS c FROM pofu_candidates WHERE user_id IN (${ph})`).get(...ids).c;
 
   const callStats = db.prepare(`
     SELECT COUNT(*) AS total,
            SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed,
            AVG(CASE WHEN duration_sec IS NOT NULL AND duration_sec > 0 THEN duration_sec END) AS avg_duration
-    FROM calls WHERE user_id=?
-  `).get(uid);
+    FROM calls WHERE user_id IN (${ph})
+  `).get(...ids);
 
   // ── Pipeline Funnel ───────────────────────────────────────────────────────
   const scAll = db.prepare(`
@@ -34,8 +60,8 @@ router.get('/summary', (req, res) => {
            sc.vi_invite_sent, sc.vi_review, sc.ai_interview_score, sc.match_percentage
     FROM session_candidates sc
     JOIN sessions s ON s.id = sc.session_id
-    WHERE s.user_id = ?
-  `).all(uid);
+    WHERE s.user_id IN (${ph})
+  `).all(...ids);
 
   const funnel = {
     sourced:     scAll.length,
@@ -76,8 +102,8 @@ router.get('/summary', (req, res) => {
     SELECT vc.status
     FROM video_candidates vc
     JOIN video_interviews vi ON vi.id = vc.interview_id
-    WHERE vi.user_id = ?
-  `).all(uid);
+    WHERE vi.user_id IN (${ph})
+  `).all(...ids);
 
   const videoFunnel = {
     total:      vcAll.length,
@@ -92,8 +118,8 @@ router.get('/summary', (req, res) => {
     FROM video_evaluations ve
     JOIN video_candidates vc ON vc.id = ve.candidate_id
     JOIN video_interviews vi ON vi.id = vc.interview_id
-    WHERE vi.user_id = ?
-  `).all(uid);
+    WHERE vi.user_id IN (${ph})
+  `).all(...ids);
 
   const evalScoreBuckets = toBucket(evalAll, 'overall_score');
 
@@ -118,7 +144,7 @@ router.get('/summary', (req, res) => {
   });
 
   // ── POFU metrics ──────────────────────────────────────────────────────────
-  const pofuAll = db.prepare("SELECT state, risk_level, risk_score FROM pofu_candidates WHERE user_id=?").all(uid);
+  const pofuAll = db.prepare(`SELECT state, risk_level, risk_score FROM pofu_candidates WHERE user_id IN (${ph})`).all(...ids);
   const stateCounts = {}; const riskCounts = { low: 0, medium: 0, high: 0 };
   pofuAll.forEach(r => {
     stateCounts[r.state] = (stateCounts[r.state] || 0) + 1;
@@ -132,14 +158,14 @@ router.get('/summary', (req, res) => {
     SELECT pe.direction, COUNT(*) AS c
     FROM pofu_emails pe
     JOIN pofu_candidates pc ON pc.id = pe.pofu_candidate_id
-    WHERE pc.user_id = ?
+    WHERE pc.user_id IN (${ph})
     GROUP BY pe.direction
-  `).all(uid);
+  `).all(...ids);
   const emailCounts = { outbound: 0, inbound: 0 };
   emailRows.forEach(r => { emailCounts[r.direction] = r.c; });
 
   // ── Jobs breakdown ────────────────────────────────────────────────────────
-  const jobStatusRows = db.prepare("SELECT status, COUNT(*) AS c FROM jobs WHERE user_id=? GROUP BY status").all(uid);
+  const jobStatusRows = db.prepare(`SELECT status, COUNT(*) AS c FROM jobs WHERE user_id IN (${ph}) GROUP BY status`).all(...ids);
   const jobStatus = {};
   jobStatusRows.forEach(r => { jobStatus[r.status] = r.c; });
 
@@ -153,8 +179,8 @@ router.get('/summary', (req, res) => {
           THEN julianday(sc.selected_at) - julianday(sc.vi_invite_sent_at) END)           AS avg_vi_to_selected
     FROM session_candidates sc
     JOIN sessions s ON s.id = sc.session_id
-    WHERE s.user_id = ? AND sc.selected_at IS NOT NULL
-  `).get(uid);
+    WHERE s.user_id IN (${ph}) AND sc.selected_at IS NOT NULL
+  `).get(...ids);
 
   const timing = {
     avgTimeToHire:   timingRow.avg_time_to_hire   != null ? Math.round(timingRow.avg_time_to_hire)   : null,
@@ -183,11 +209,11 @@ router.get('/summary', (req, res) => {
     FROM sessions s
     LEFT JOIN session_candidates sc ON sc.session_id = s.id
     LEFT JOIN jobs j ON j.id = s.job_id
-    WHERE s.user_id = ?
+    WHERE s.user_id IN (${ph})
     GROUP BY s.id
     ORDER BY s.created_at DESC
     LIMIT 25
-  `).all(uid);
+  `).all(...ids);
 
   // ── Assessment analytics ──────────────────────────────────────────────────
   const mcqRow = db.prepare(`
@@ -202,14 +228,14 @@ router.get('/summary', (req, res) => {
     FROM assessments a
     LEFT JOIN assessment_invites ai ON ai.assessment_id = a.id
     LEFT JOIN assessment_submissions asub ON asub.invite_id = ai.id
-    WHERE a.user_id = ?
-  `).get(uid);
+    WHERE a.user_id IN (${ph})
+  `).get(...ids);
 
   const mcqScoreRows = db.prepare(`
     SELECT asub.score FROM assessment_submissions asub
     JOIN assessments a ON a.id = asub.assessment_id
-    WHERE a.user_id = ? AND asub.score IS NOT NULL
-  `).all(uid);
+    WHERE a.user_id IN (${ph}) AND asub.score IS NOT NULL
+  `).all(...ids);
 
   const codingRow = db.prepare(`
     SELECT
@@ -223,14 +249,14 @@ router.get('/summary', (req, res) => {
     FROM coding_assessments ca
     LEFT JOIN coding_invites ci ON ci.assessment_id = ca.id
     LEFT JOIN coding_submissions csub ON csub.invite_id = ci.id
-    WHERE ca.user_id = ?
-  `).get(uid);
+    WHERE ca.user_id IN (${ph})
+  `).get(...ids);
 
   const codingScoreRows = db.prepare(`
     SELECT csub.score FROM coding_submissions csub
     JOIN coding_assessments ca ON ca.id = csub.assessment_id
-    WHERE ca.user_id = ? AND csub.score IS NOT NULL
-  `).all(uid);
+    WHERE ca.user_id IN (${ph}) AND csub.score IS NOT NULL
+  `).all(...ids);
 
   const assessments = {
     mcq: {
@@ -598,6 +624,97 @@ router.get('/details', (req, res) => {
     res.json({ candidates, mcqInvites, codingInvites, videoCandidates, pofuCandidates });
   } catch (err) {
     console.error('[reports/details]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /reports/qa-list — Recruiter QA: list of saved per-call QA reports ────
+router.get('/qa-list', (req, res) => {
+  try {
+    // Owners and Team Leads see every recruiter's QA reports in the company;
+    // everyone else sees only their own (Recruiter QA is the coaching surface
+    // and a Team Lead reviewing call quality is the primary use case).
+    const { ids, placeholders } = inSet(req);
+    if (ids.length === 0) return res.json({ stats: { totalReviewed: 0, avgScore: null, needsCoachingPct: 0, needsCoachingCount: 0, topWeakDimension: null }, rows: [] });
+
+    const rows = db.prepare(`
+      SELECT c.call_sid       AS callSid,
+             c.candidate_name AS candidateName,
+             c.role_title     AS roleTitle,
+             c.started_at     AS startedAt,
+             c.duration_sec   AS durationSec,
+             c.status         AS callStatus,
+             u.display_name   AS recruiterName,
+             r.payload        AS payload,
+             r.generated_at   AS generatedAt
+      FROM reports r
+      JOIN calls c ON c.id = r.call_id
+      JOIN users u ON u.id = c.user_id
+      WHERE r.report_type = 'qa'
+        AND c.user_id IN (${placeholders})
+      ORDER BY r.generated_at DESC
+      LIMIT 100
+    `).all(...ids);
+
+    const items = [];
+    let scoreSum = 0, scoreCount = 0, needsCoachingCount = 0;
+    const dimWeakTally = {};
+
+    for (const row of rows) {
+      const qa = parseJSON(row.payload);
+      if (!qa) continue;
+
+      const score = Number(qa?.summary?.score ?? 0);
+      const verdict = qa?.summary?.verdict ?? '';
+      const riskLevel = qa?.summary?.riskLevel ?? '';
+
+      // Weakest dimension = scorecard row with lowest pct
+      let weakestDimension = null, weakestPct = 101;
+      const sc = Array.isArray(qa?.scorecard) ? qa.scorecard : [];
+      for (const d of sc) {
+        const pct = Number(d?.pct ?? 0);
+        if (pct < weakestPct) { weakestPct = pct; weakestDimension = d?.dimension ?? null; }
+      }
+      if (weakestDimension) {
+        dimWeakTally[weakestDimension] = (dimWeakTally[weakestDimension] || 0) + 1;
+      }
+
+      if (Number.isFinite(score)) { scoreSum += score; scoreCount += 1; }
+      if (score < 70) needsCoachingCount += 1;
+
+      items.push({
+        callSid:          row.callSid,
+        candidateName:    row.candidateName || qa?.meta?.candidate || '—',
+        roleTitle:        row.roleTitle     || qa?.meta?.role      || '—',
+        recruiterName:    row.recruiterName || qa?.meta?.recruiter || '—',
+        startedAt:        row.startedAt,
+        durationSec:      row.durationSec,
+        callStatus:       row.callStatus,
+        generatedAt:      row.generatedAt,
+        score,
+        verdict,
+        riskLevel,
+        weakestDimension,
+      });
+    }
+
+    let topWeakDimension = null, topWeakCount = 0;
+    for (const [dim, count] of Object.entries(dimWeakTally)) {
+      if (count > topWeakCount) { topWeakDimension = dim; topWeakCount = count; }
+    }
+
+    res.json({
+      stats: {
+        totalReviewed:     items.length,
+        avgScore:          scoreCount > 0 ? Math.round(scoreSum / scoreCount) : null,
+        needsCoachingPct:  items.length > 0 ? Math.round(needsCoachingCount / items.length * 100) : 0,
+        needsCoachingCount,
+        topWeakDimension,
+      },
+      rows: items,
+    });
+  } catch (err) {
+    console.error('[reports/qa-list]', err);
     res.status(500).json({ error: err.message });
   }
 });

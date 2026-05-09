@@ -392,6 +392,109 @@ try { db.exec('ALTER TABLE session_candidates ADD COLUMN interview_scheduled_at 
 // Selection timestamp for time-to-hire analytics
 try { db.exec('ALTER TABLE session_candidates ADD COLUMN selected_at TEXT'); } catch (_) {}
 
+// ── Phase 0: scope jobs and candidates by company_id ─────────────────────────
+// Adds company_id columns to jobs/candidates so that every recruiter only sees
+// their own agency's data (instead of the previous behaviour where jobs and
+// candidates were globally visible to every authenticated user).
+try { db.exec('ALTER TABLE jobs       ADD COLUMN company_id INTEGER REFERENCES companies(id)'); } catch (_) {}
+try { db.exec('ALTER TABLE candidates ADD COLUMN company_id INTEGER REFERENCES companies(id)'); } catch (_) {}
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_jobs_company_id       ON jobs(company_id)'); } catch (_) {}
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_candidates_company_id ON candidates(company_id)'); } catch (_) {}
+
+// ── Phase 2: job assignment / ownership ───────────────────────────────────
+// Recruiters, sourcers, team leads can be ASSIGNED to a job. Visibility stays
+// company-wide (Phase 0); assignment only flags responsibility and powers the
+// "My Jobs" filter.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS job_assignees (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id        INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    user_id       INTEGER NOT NULL REFERENCES users(id),
+    role_on_job   TEXT    NOT NULL CHECK(role_on_job IN ('lead','collaborator','sourcer')),
+    assigned_by   INTEGER REFERENCES users(id),
+    assigned_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(job_id, user_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_job_assignees_job  ON job_assignees(job_id);
+  CREATE INDEX IF NOT EXISTS idx_job_assignees_user ON job_assignees(user_id);
+`);
+
+// ── Phase 4: Hiring Manager portal ───────────────────────────────────────
+// External stakeholders (role=hiring_manager) attach to specific jobs and
+// submit per-candidate feedback. They never see the candidate database in
+// bulk — only the candidates pushed through evaluation on jobs they own.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS job_hiring_managers (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id    INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    user_id   INTEGER NOT NULL REFERENCES users(id),
+    added_by  INTEGER REFERENCES users(id),
+    added_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(job_id, user_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_jhm_user ON job_hiring_managers(user_id);
+  CREATE INDEX IF NOT EXISTS idx_jhm_job  ON job_hiring_managers(job_id);
+
+  CREATE TABLE IF NOT EXISTS hm_candidate_feedback (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id          INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    candidate_id    INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+    hm_user_id      INTEGER NOT NULL REFERENCES users(id),
+    recommendation  TEXT    CHECK(recommendation IN ('strong_yes','yes','maybe','no','strong_no')),
+    notes           TEXT,
+    submitted_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(job_id, candidate_id, hm_user_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_hcf_job  ON hm_candidate_feedback(job_id);
+  CREATE INDEX IF NOT EXISTS idx_hcf_cand ON hm_candidate_feedback(candidate_id);
+`);
+
+// ── Phase 5: activity log ─────────────────────────────────────────────────
+// Append-only timeline of who did what. Driven by logActivity() in route
+// handlers. Best-effort: insertion failures must never break the request,
+// so this is a separate, independently-maintained table.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS activity_log (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id   INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    user_id      INTEGER NOT NULL REFERENCES users(id),
+    action       TEXT    NOT NULL,
+    entity_type  TEXT    NOT NULL,
+    entity_id    INTEGER,
+    metadata     TEXT,
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_activity_company ON activity_log(company_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_activity_user    ON activity_log(user_id);
+  CREATE INDEX IF NOT EXISTS idx_activity_entity  ON activity_log(entity_type, entity_id);
+`);
+
+// ── Market Intelligence (4-stage pipeline per Zeople-MI-Algorithm-Spec) ───
+// One row per generated report. Stages 2 (research) and 4 (final report) write
+// into research_doc and report_data respectively, so each stage can be re-run
+// independently without burning a fresh web-research call.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS mi_reports (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    company_id      INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    job_id          INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+    status          TEXT    NOT NULL DEFAULT 'pending'
+                    CHECK(status IN ('pending','researching','structuring','generating','completed','failed')),
+    job_context     TEXT    NOT NULL,         -- JSON: the JobContext fed into Stage 2
+    research_doc    TEXT,                     -- JSON: raw Stage 2 content + citations
+    report_data     TEXT,                     -- JSON: final ReportData (structuredData + execSummary)
+    failure_reason  TEXT,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_mi_reports_company ON mi_reports(company_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_mi_reports_user    ON mi_reports(user_id);
+  CREATE INDEX IF NOT EXISTS idx_mi_reports_job     ON mi_reports(job_id);
+  CREATE INDEX IF NOT EXISTS idx_mi_reports_status  ON mi_reports(status) WHERE status != 'completed';
+`);
+
 // Migration: candidate interaction columns on pofu_emails
 try { db.exec('ALTER TABLE pofu_emails ADD COLUMN response_token TEXT'); } catch (_) {}
 try { db.exec('ALTER TABLE pofu_emails ADD COLUMN response_options TEXT'); } catch (_) {}
@@ -525,7 +628,12 @@ db.exec(`
       "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'"
     ).get();
 
-    const needsConstraintFix = userMaster && !userMaster.sql.includes('superuser');
+    // Trigger only when the schema is genuinely the v1 shape (no 'superuser')
+    // AND not yet at v3 (no 'hiring_manager'). After Phase 1 the table sits at
+    // v3 and "superuser" is absent — without the v3 guard we'd misfire here.
+    const needsConstraintFix = userMaster
+      && !userMaster.sql.includes('superuser')
+      && !userMaster.sql.includes('hiring_manager');
 
     if (needsConstraintFix) {
       const cols = db.pragma('table_info(users)').map(c => c.name);
@@ -571,12 +679,57 @@ db.exec(`
     console.error('[migration] users table:', e.message);
     try { db.pragma('foreign_keys = ON'); } catch (_) {}
   }
+
+  // ── Phase 1: expand users.role CHECK to the 6-role hierarchy ──────────────
+  // owner / team_lead / sr_recruiter / recruiter / sourcer / hiring_manager
+  // Maps existing rows: admin → owner, superuser → owner, subuser → recruiter.
+  try {
+    const userMaster = db.prepare(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'"
+    ).get();
+    const needsRoleExpansion = userMaster && !userMaster.sql.includes('hiring_manager');
+
+    if (needsRoleExpansion) {
+      db.pragma('foreign_keys = OFF');
+      db.exec(`
+        CREATE TABLE users_v3 (
+          id            INTEGER PRIMARY KEY AUTOINCREMENT,
+          email         TEXT    NOT NULL UNIQUE,
+          password_hash TEXT    NOT NULL,
+          role          TEXT    NOT NULL CHECK(role IN
+                          ('owner','team_lead','sr_recruiter','recruiter','sourcer','hiring_manager')),
+          display_name  TEXT,
+          company_id    INTEGER,
+          created_by    INTEGER,
+          is_active     INTEGER NOT NULL DEFAULT 1,
+          created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO users_v3 (id, email, password_hash, role, display_name, company_id, created_by, is_active, created_at)
+        SELECT id, email, password_hash,
+          CASE role
+            WHEN 'admin'     THEN 'owner'
+            WHEN 'superuser' THEN 'owner'
+            WHEN 'subuser'   THEN 'recruiter'
+            ELSE role
+          END,
+          display_name, company_id, created_by, is_active, created_at
+        FROM users;
+        DROP TABLE users;
+        ALTER TABLE users_v3 RENAME TO users;
+      `);
+      db.pragma('foreign_keys = ON');
+      console.log('✅ Migrated users table: role CHECK expanded to 6 roles · existing rows remapped');
+    }
+  } catch (e) {
+    console.error('[migration] users role expansion:', e.message);
+    try { db.pragma('foreign_keys = ON'); } catch (_) {}
+  }
 })();
 
 async function seedUsers() {
   const users = [
-    { email: 'pratik@zeople-ai.com',  password: 'password123', role: 'admin',     display_name: 'Pratik'  },
-    { email: 'divakar@zeople-ai.com', password: 'password123', role: 'superuser', display_name: 'Divakar' },
+    { email: 'pratik@zeople-ai.com',  password: 'password123', role: 'owner', display_name: 'Pratik'  },
+    { email: 'divakar@zeople-ai.com', password: 'password123', role: 'owner', display_name: 'Divakar' },
   ];
 
   for (const user of users) {
@@ -604,4 +757,59 @@ async function seedUsers() {
   }
 }
 
-module.exports = { db, seedUsers };
+// ── Phase 0 backfill: ensure every user has a company and every job/candidate
+// is scoped to one. Runs AFTER seedUsers() so the seeded admin/superuser exist.
+function ensureCompanyScoping() {
+  // 1. For every user with no company_id, create a personal workspace and
+  //    attach them to it. Owner-of-record on the company is the user themself.
+  const orphanUsers = db.prepare(
+    'SELECT id, email, display_name FROM users WHERE company_id IS NULL'
+  ).all();
+
+  if (orphanUsers.length) {
+    const insertCompany = db.prepare(
+      `INSERT INTO companies (owner_id, name, industry, contact_email)
+       VALUES (?, ?, ?, ?)`
+    );
+    const linkUser = db.prepare(
+      'UPDATE users SET company_id = ? WHERE id = ?'
+    );
+
+    db.transaction(() => {
+      for (const u of orphanUsers) {
+        const name = `${u.display_name || u.email.split('@')[0]}'s Workspace`;
+        const co   = insertCompany.run(u.id, name, 'Recruitment', u.email);
+        linkUser.run(co.lastInsertRowid, u.id);
+        console.log(`✅ [phase 0] Created company "${name}" for user ${u.email}`);
+      }
+    })();
+  }
+
+  // 2. Backfill jobs.company_id from each row's creator user.
+  const jobsBackfilled = db.prepare(
+    `UPDATE jobs
+     SET company_id = (SELECT company_id FROM users WHERE users.id = jobs.user_id)
+     WHERE company_id IS NULL`
+  ).run().changes;
+  if (jobsBackfilled) console.log(`✅ [phase 0] Backfilled company_id on ${jobsBackfilled} job(s)`);
+
+  // 3. Backfill candidates.company_id from each row's creator user.
+  const candsBackfilled = db.prepare(
+    `UPDATE candidates
+     SET company_id = (SELECT company_id FROM users WHERE users.id = candidates.user_id)
+     WHERE company_id IS NULL`
+  ).run().changes;
+  if (candsBackfilled) console.log(`✅ [phase 0] Backfilled company_id on ${candsBackfilled} candidate(s)`);
+
+  // 4. Phase 2 backfill: for every existing job, insert a 'lead' assignee row
+  //    pointing to the original creator. Idempotent via UNIQUE(job_id,user_id).
+  const leadsBackfilled = db.prepare(
+    `INSERT OR IGNORE INTO job_assignees (job_id, user_id, role_on_job, assigned_by)
+     SELECT j.id, j.user_id, 'lead', j.user_id
+     FROM jobs j
+     WHERE j.user_id IS NOT NULL`
+  ).run().changes;
+  if (leadsBackfilled) console.log(`✅ [phase 2] Created lead assignee rows for ${leadsBackfilled} job(s)`);
+}
+
+module.exports = { db, seedUsers, ensureCompanyScoping };

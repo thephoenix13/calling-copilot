@@ -67,10 +67,13 @@ async function transcribeFile(filePath) {
   return result?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
 }
 
-function getInterviewWithDetails(interviewId, userId) {
+function getInterviewWithDetails(interviewId, allowedUserIds) {
+  const ids = Array.isArray(allowedUserIds) ? allowedUserIds : [allowedUserIds];
+  if (ids.length === 0) return null;
+  const placeholders = ids.map(() => '?').join(',');
   const iv = db.prepare(
-    'SELECT * FROM video_interviews WHERE id = ? AND user_id = ?'
-  ).get(interviewId, userId);
+    `SELECT * FROM video_interviews WHERE id = ? AND user_id IN (${placeholders})`
+  ).get(interviewId, ...ids);
   if (!iv) return null;
 
   const questions = db.prepare(
@@ -191,10 +194,18 @@ router.post('/public/complete', (req, res) => {
 // ── AUTH middleware for all routes below ─────────────────────────────────────
 router.use(auth);
 
+const { requireWrite, requireRead } = require('../middleware/permissions');
+const { visibleUserIds } = require('../utils/scoping');
+router.use(requireRead('video.read'));
+router.use(requireWrite('video.write'));
+
 // ── Interview CRUD ───────────────────────────────────────────────────────────
 
 // GET /vi/interviews
 router.get('/interviews', (req, res) => {
+  const ids = visibleUserIds(req);
+  if (ids.length === 0) return res.json({ interviews: [] });
+  const placeholders = ids.map(() => '?').join(',');
   const rows = db.prepare(`
     SELECT vi.*,
       j.title AS job_title,
@@ -204,9 +215,9 @@ router.get('/interviews', (req, res) => {
       (SELECT COUNT(*) FROM video_candidates WHERE interview_id = vi.id AND status='evaluated') AS evaluated_count
     FROM video_interviews vi
     LEFT JOIN jobs j ON j.id = vi.job_id
-    WHERE vi.user_id = ?
+    WHERE vi.user_id IN (${placeholders})
     ORDER BY vi.created_at DESC
-  `).all(req.user.id);
+  `).all(...ids);
   res.json({ interviews: rows });
 });
 
@@ -234,7 +245,7 @@ router.post('/interviews', (req, res) => {
 
 // GET /vi/interviews/:id
 router.get('/interviews/:id', (req, res) => {
-  const iv = getInterviewWithDetails(req.params.id, req.user.id);
+  const iv = getInterviewWithDetails(req.params.id, visibleUserIds(req));
   if (!iv) return res.status(404).json({ error: 'Not found.' });
   res.json({ interview: iv });
 });
@@ -255,7 +266,7 @@ router.put('/interviews/:id', (req, res) => {
     req.params.id, req.user.id,
   );
 
-  const iv = getInterviewWithDetails(req.params.id, req.user.id);
+  const iv = getInterviewWithDetails(req.params.id, visibleUserIds(req));
   res.json({ interview: iv });
 });
 
@@ -307,7 +318,7 @@ router.post('/interviews/:id/generate', async (req, res) => {
       db.prepare("UPDATE video_interviews SET job_description=?, updated_at=datetime('now') WHERE id=?").run(jd, iv.id);
     }
 
-    const updated = getInterviewWithDetails(iv.id, req.user.id);
+    const updated = getInterviewWithDetails(iv.id, visibleUserIds(req));
     res.json({ interview: updated });
   } catch (err) {
     console.error('[VI] Generate questions error:', err.message);

@@ -9,7 +9,7 @@ const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const { db, seedUsers } = require('./db');
+const { db, seedUsers, ensureCompanyScoping } = require('./db');
 
 // ── App setup ──────────────────────────────────────────────────────────────
 const app = express();
@@ -58,6 +58,8 @@ app.use('/reports',     require('./routes/reports'));
 app.use('/assessments',        require('./routes/assessments'));
 app.use('/coding-assessments', require('./routes/coding-assessments'));
 app.use('/settings',           require('./routes/settings'));
+app.use('/hm',                 require('./routes/hm'));
+app.use('/mi',                 require('./routes/market-intelligence'));
 
 // ── Recording status webhook ────────────────────────────────────────────────
 app.post('/recording-status', async (req, res) => {
@@ -270,6 +272,7 @@ cron.schedule('0 */6 * * *', () => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
   await seedUsers();
+  ensureCompanyScoping();
   console.log(`\n🚀 Server running at http://localhost:${PORT}`);
   console.log(`   Token endpoint:     POST http://localhost:${PORT}/token`);
   console.log(`   Voice webhook:      POST http://localhost:${PORT}/voice`);

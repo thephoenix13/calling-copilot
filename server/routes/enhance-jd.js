@@ -240,45 +240,14 @@ ${description}`;
   return parseJSON(raw);
 }
 
-async function genMarketIntelligence(job) {
-  const ctx = buildJobContext(job, null);
-  const sys = `You are a talent market analyst specialising in Indian recruitment. Provide realistic, data-driven market intelligence based on current hiring trends.`;
-
-  const user = `Generate market intelligence for this job role in India (2025). Return ONLY valid JSON.
-
-Schema:
-{
-  "salaryBenchmarks": {
-    "junior": { "min": number, "max": number, "label": "0-3 years" },
-    "mid":    { "min": number, "max": number, "label": "3-6 years" },
-    "senior": { "min": number, "max": number, "label": "6+ years" }
-  },
-  "demandSignal": "high|medium|low",
-  "demandRationale": "2-3 sentences on talent supply vs demand in India",
-  "competitorHiring": ["5-7 companies actively hiring for similar profiles"],
-  "hotSkills": [{ "skill": "...", "trend": "rising|stable|declining" }],
-  "sourcingChannels": [
-    { "channel": "Naukri|LinkedIn|GitHub|etc", "priority": "primary|secondary", "tip": "one actionable tip" }
-  ],
-  "candidateExpectations": ["4-6 key expectations candidates in this segment typically have"],
-  "avgNoticePeriod": "e.g. 30-60 days",
-  "availabilityScore": "high|medium|low",
-  "availabilityNotes": "1-2 sentences on candidate availability and competition"
-}
-
-All salaries in LPA. Be realistic for the Indian market.
-
----
-${ctx}`;
-
-  const raw = await callAI(sys, user, 2000, 0.6);
-  return parseJSON(raw);
-}
+// Note: the legacy single-prompt genMarketIntelligence() was retired in favour
+// of the full 4-stage pipeline at server/routes/market-intelligence.js. The MI
+// tab in JDEnhancer now wraps the new module via MarketIntelTabWrapper.
 
 // ── Routes ───────────────────────────────────────────────────────────────────
 
 const STANDARD_FIELDS = ['formattedJD', 'recruiterBrief', 'clarificationQuestions', 'reachoutMaterial', 'sourcingKeywords'];
-const ALL_FIELDS = [...STANDARD_FIELDS, 'marketIntelligence'];
+const ALL_FIELDS = [...STANDARD_FIELDS];
 
 const CATEGORY_LABELS = {
   domainAndIndustry:       'Domain & Industry',
@@ -347,7 +316,6 @@ router.post('/', async (req, res) => {
     clarificationQuestions: () => genClarificationQuestions(job, clientNotes, manualInput),
     reachoutMaterial:       () => genReachoutMaterial(job, clientNotes, companyScript, manualInput),
     sourcingKeywords:       () => genSourcingKeywords(job, clientNotes, manualInput),
-    marketIntelligence:     () => genMarketIntelligence(job),
   };
 
   const results = {};

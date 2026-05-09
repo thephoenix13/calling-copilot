@@ -135,9 +135,17 @@ router.post('/take/:token/submit', (req, res) => {
 // ── AUTH middleware ───────────────────────────────────────────────────────────
 router.use(auth);
 
+const { requireWrite, requireRead } = require('../middleware/permissions');
+const { visibleUserIds } = require('../utils/scoping');
+router.use(requireRead('assessments.read'));
+router.use(requireWrite('assessments.write'));
+
 // ── Assessment CRUD ───────────────────────────────────────────────────────────
 
 router.get('/', (req, res) => {
+  const ids = visibleUserIds(req);
+  if (ids.length === 0) return res.json({ assessments: [] });
+  const placeholders = ids.map(() => '?').join(',');
   const rows = db.prepare(`
     SELECT a.*,
            COUNT(DISTINCT cq.id)  AS question_count,
@@ -149,10 +157,10 @@ router.get('/', (req, res) => {
     LEFT JOIN coding_invites ci   ON ci.assessment_id = a.id
     LEFT JOIN coding_invites ci2  ON ci2.assessment_id = a.id AND ci2.status = 'completed'
     LEFT JOIN jobs j              ON j.id = a.job_id
-    WHERE a.user_id = ?
+    WHERE a.user_id IN (${placeholders})
     GROUP BY a.id
     ORDER BY a.created_at DESC
-  `).all(req.user.id);
+  `).all(...ids);
   res.json({ assessments: rows });
 });
 
@@ -169,7 +177,12 @@ router.post('/', (req, res) => {
 });
 
 router.get('/:id', (req, res) => {
-  const assessment = db.prepare('SELECT * FROM coding_assessments WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  const ids = visibleUserIds(req);
+  if (ids.length === 0) return res.status(404).json({ error: 'Not found.' });
+  const placeholders = ids.map(() => '?').join(',');
+  const assessment = db.prepare(
+    `SELECT * FROM coding_assessments WHERE id = ? AND user_id IN (${placeholders})`
+  ).get(req.params.id, ...ids);
   if (!assessment) return res.status(404).json({ error: 'Not found.' });
 
   const questions = db.prepare('SELECT * FROM coding_questions WHERE assessment_id = ? ORDER BY order_num, id').all(req.params.id);

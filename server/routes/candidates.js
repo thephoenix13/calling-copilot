@@ -7,6 +7,7 @@ const pdfParse = require('pdf-parse');
 const Anthropic = require('@anthropic-ai/sdk');
 const { db }   = require('../db');
 const auth     = require('../middleware/auth');
+const { requireCapability } = require('../middleware/permissions');
 
 const anthropic = new Anthropic();
 
@@ -34,6 +35,11 @@ const upload = multer({
 
 router.use(auth);
 
+// Read access excludes Hiring Managers — they should not see the company-wide
+// candidate database. (Job-scoped views in /hm/* are how they see candidates.)
+const { requireRead } = require('../middleware/permissions');
+router.use(requireRead('candidates.read'));
+
 function parseCandidate(c) {
   return {
     ...c,
@@ -42,11 +48,11 @@ function parseCandidate(c) {
   };
 }
 
-// GET /candidates — shared across users
+// GET /candidates — list candidates for the current user's company
 router.get('/', (req, res) => {
   const { search, status } = req.query;
-  let q = 'SELECT * FROM candidates WHERE 1=1';
-  const params = [];
+  let q = 'SELECT * FROM candidates WHERE company_id = ?';
+  const params = [req.user.company_id];
 
   if (status && status !== 'all') { q += ' AND status = ?'; params.push(status); }
   else                            { q += " AND status = 'active'"; }
@@ -64,13 +70,15 @@ router.get('/', (req, res) => {
 
 // GET /candidates/:id
 router.get('/:id', (req, res) => {
-  const c = db.prepare('SELECT * FROM candidates WHERE id = ?').get(req.params.id);
+  const c = db.prepare(
+    'SELECT * FROM candidates WHERE id = ? AND company_id = ?'
+  ).get(req.params.id, req.user.company_id);
   if (!c) return res.status(404).json({ error: 'Candidate not found.' });
   res.json(parseCandidate(c));
 });
 
 // POST /candidates — create (manual or from parsed resume)
-router.post('/', (req, res) => {
+router.post('/', requireCapability('candidates.create'), (req, res) => {
   const {
     name, email, phone, location, current_title, current_company,
     experience_years, skills, education, work_history,
@@ -81,12 +89,13 @@ router.post('/', (req, res) => {
 
   const result = db.prepare(`
     INSERT INTO candidates
-      (user_id, name, email, phone, location, current_title, current_company,
+      (user_id, company_id, name, email, phone, location, current_title, current_company,
        experience_years, skills, education, work_history, linkedin_url, portfolio_url,
        resume_filename, resume_text)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     req.user.id,
+    req.user.company_id,
     name.trim(),
     email         || null,
     phone         || null,
@@ -108,8 +117,10 @@ router.post('/', (req, res) => {
 });
 
 // PUT /candidates/:id — full update
-router.put('/:id', (req, res) => {
-  const existing = db.prepare('SELECT id FROM candidates WHERE id = ?').get(req.params.id);
+router.put('/:id', requireCapability('candidates.update'), (req, res) => {
+  const existing = db.prepare(
+    'SELECT id FROM candidates WHERE id = ? AND company_id = ?'
+  ).get(req.params.id, req.user.company_id);
   if (!existing) return res.status(404).json({ error: 'Candidate not found.' });
 
   const {
@@ -151,8 +162,10 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /candidates/:id
-router.delete('/:id', (req, res) => {
-  const existing = db.prepare('SELECT id FROM candidates WHERE id = ?').get(req.params.id);
+router.delete('/:id', requireCapability('candidates.delete'), (req, res) => {
+  const existing = db.prepare(
+    'SELECT id FROM candidates WHERE id = ? AND company_id = ?'
+  ).get(req.params.id, req.user.company_id);
   if (!existing) return res.status(404).json({ error: 'Candidate not found.' });
   db.prepare('DELETE FROM candidates WHERE id = ?').run(req.params.id);
   res.json({ ok: true });

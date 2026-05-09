@@ -19,6 +19,9 @@ import POFUModule from './components/agentic/POFUModule';
 import WelcomeDashboard from './components/WelcomeDashboard';
 import VideoInterviewModule from './components/agentic/VideoInterviewModule';
 import ReportsModule from './components/agentic/ReportsModule';
+import RecruiterQAModule from './components/agentic/RecruiterQAModule';
+import ActivityFeedModule from './components/agentic/ActivityFeedModule';
+import MarketIntelligenceModule from './components/agentic/MarketIntelligenceModule';
 import CandidateFlow from './components/video/CandidateFlow';
 import CandidateResponsePage from './components/CandidateResponsePage';
 import AssessmentsModule from './components/agentic/AssessmentsModule';
@@ -26,6 +29,7 @@ import CandidateAssessment from './components/assessment/CandidateAssessment';
 import CodingAssessmentsModule from './components/agentic/CodingAssessmentsModule';
 import CandidateCodingAssessment from './components/assessment/CandidateCodingAssessment';
 import SettingsModule from './components/agentic/SettingsModule';
+import HMApp from './components/hm/HMApp';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
@@ -87,7 +91,9 @@ export default function App() {
       return token;
     } catch { return null; }
   });
-  const isAdmin = userRole === 'admin';
+  // Privileged users that can see the cross-company "Users" panel.
+  // Accept legacy 'admin' so old JWTs still work until the user re-logs in.
+  const isAdmin = userRole === 'owner' || userRole === 'team_lead' || userRole === 'admin';
   const [view, setView] = useState('calling-copilot');
   const [sessionId, setSessionId] = useState(null);
   const [displayName, setDisplayName] = useState('');
@@ -240,8 +246,8 @@ export default function App() {
     while (i < words.length) {
       if (getCancelled()) break;
 
-      // 3–6 words per chunk
-      const chunkSize = 3 + Math.floor(Math.random() * 4);
+      // 4–8 words per chunk (faster reveal)
+      const chunkSize = 4 + Math.floor(Math.random() * 5);
       const chunk = words.slice(i, i + chunkSize).join(' ');
       built += (built ? ' ' : '') + chunk;
       i += chunkSize;
@@ -252,12 +258,12 @@ export default function App() {
         return [...finals, { text: snap, isFinal: false, speaker }];
       });
 
-      // Natural speech cadence — longer at sentence ends
+      // Faster cadence (~2.5× the previous speed)
       const lastWord = words[Math.min(i - 1, words.length - 1)];
       const atStop = /[.?!]$/.test(lastWord);
       const delay = atStop
-        ? 1100 + Math.random() * 600   // 1.1–1.7s after sentence ends
-        : 600  + Math.random() * 400;  // 0.6–1.0s between word groups
+        ? 400 + Math.random() * 250   // 0.4–0.65s after sentence ends
+        : 220 + Math.random() * 180;  // 0.22–0.40s between word groups
 
       await sleep(delay);
     }
@@ -334,7 +340,7 @@ export default function App() {
       setTranscript(prev => [...prev.filter(e => e.isFinal), recruiterEntry]);
 
       // Pause — candidate processing before responding
-      await sleep(1500 + Math.random() * 1000);
+      await sleep(500 + Math.random() * 400);
       if (autoDemoCancelRef.current) break;
 
       // Show "..." while waiting for candidate response
@@ -386,7 +392,7 @@ export default function App() {
 
       // Pause before recruiter asks next question
       const isLast = i === cfg.questions.length - 1;
-      await sleep(isLast ? 800 : 3000 + Math.random() * 1500);
+      await sleep(isLast ? 400 : 900 + Math.random() * 500);
     }
 
     setIsAutoDemoRunning(false);
@@ -463,6 +469,17 @@ export default function App() {
     );
   }
 
+  // Hiring Managers get a completely separate, slimmed-down portal.
+  if (userRole === 'hiring_manager') {
+    return (
+      <HMApp
+        authFetch={authFetch}
+        displayName={displayName}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   const navigate = (newView) => {
     setView(newView);
     if (newView !== 'sessions') setSessionId(null);
@@ -499,7 +516,10 @@ export default function App() {
   if (view === 'mcq-assessments')     return <AppShell {...shellProps}><AssessmentsModule      {...moduleProps} onNavigate={navigate} /></AppShell>;
   if (view === 'coding-assessments')  return <AppShell {...shellProps}><CodingAssessmentsModule {...moduleProps} onNavigate={navigate} /></AppShell>;
   if (view === 'reports')          return <AppShell {...shellProps}><ReportsModule authFetch={authFetch} /></AppShell>;
-  if (view === 'settings')         return <AppShell {...shellProps}><SettingsModule authFetch={authFetch} /></AppShell>;
+  if (view === 'recruiter-qa')     return <AppShell {...shellProps}><RecruiterQAModule authFetch={authFetch} /></AppShell>;
+  if (view === 'activity')         return <AppShell {...shellProps}><ActivityFeedModule authFetch={authFetch} /></AppShell>;
+  if (view === 'market-intel')     return <AppShell {...shellProps}><MarketIntelligenceModule authFetch={authFetch} userRole={userRole} /></AppShell>;
+  if (view === 'settings')         return <AppShell {...shellProps}><SettingsModule authFetch={authFetch} userRole={userRole} displayName={displayName} /></AppShell>;
 
   if (view === 'sessions') {
     if (sessionId) {
@@ -603,7 +623,7 @@ export default function App() {
               </div>
             ) : callHistoryList.length === 0 ? (
               <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-2)' }}>
-                No calls recorded yet. Run the Auto Demo or make a call to generate reports.
+                No calls recorded yet. Run the Demo Vid or make a call to generate reports.
               </div>
             ) : (
               <div className="ch-list">
@@ -668,11 +688,6 @@ export default function App() {
           )}
         </div>
         <div className="header-right">
-          {callStatus === 'idle' && (
-            <button className="report-btn auto-demo-btn" onClick={runAutoDemo}>
-              ▶ Auto Demo
-            </button>
-          )}
           {isAutoDemoRunning && (
             <button
               className="report-btn"

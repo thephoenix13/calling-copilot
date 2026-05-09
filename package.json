@@ -13,5 +13,9 @@
   "dependencies": {
     "dotenv": "^17.3.1",
     "twilio": "^5.13.1"
+  },
+  "devDependencies": {
+    "pptxgenjs": "^4.0.1",
+    "puppeteer-core": "^24.43.0"
   }
 }

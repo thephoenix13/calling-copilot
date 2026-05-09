@@ -495,12 +495,47 @@ const JD_ASSET_TABS = [
   { key: 'keywords',  label: 'Keywords',        field: 'sourcingKeywords'       },
 ];
 
-function JobDetail({ job, authFetch, onBack, onEdit, onDelete }) {
+function JobDetail({ job, authFetch, userRole, onBack, onEdit, onDelete }) {
   const [candidates,    setCandidates]    = useState([]);
   const [matchLoading,  setMatchLoading]  = useState(true);
   const [totalPool,     setTotalPool]     = useState(0);
   const [enhancement,   setEnhancement]   = useState(undefined); // undefined = loading, null = none
   const [activeAssetTab, setActiveAssetTab] = useState('jd');
+  const [assignees,     setAssignees]     = useState([]);
+  const [showAddAssignee, setShowAddAssignee] = useState(false);
+  const [teamPool,      setTeamPool]      = useState([]);
+  const [assignBusy,    setAssignBusy]    = useState(false);
+  const [hms,           setHms]           = useState([]);
+  const [showAddHm,     setShowAddHm]     = useState(false);
+  const [hmFeedback,    setHmFeedback]    = useState([]);
+
+  // Owners and Team Leads can manage assignees. Legacy role names accepted
+  // so old JWTs still work until the next sign-in.
+  const canAssign = ['owner', 'team_lead', 'admin', 'superuser'].includes(userRole);
+  // Recruiters / Sr Recruiters can also edit job content (just not assignees).
+  const canEdit   = ['owner', 'team_lead', 'sr_recruiter', 'recruiter',
+                     'admin', 'superuser', 'subuser'].includes(userRole);
+
+  const loadAssignees = useCallback(() => {
+    authFetch(`${BACKEND_URL}/jobs/${job.id}/assignees`)
+      .then(r => r.json())
+      .then(d => setAssignees(d.assignees || []))
+      .catch(() => setAssignees([]));
+  }, [job.id, authFetch]);
+
+  const loadHms = useCallback(() => {
+    authFetch(`${BACKEND_URL}/jobs/${job.id}/hiring-managers`)
+      .then(r => r.json())
+      .then(d => setHms(d.hiring_managers || []))
+      .catch(() => setHms([]));
+  }, [job.id, authFetch]);
+
+  const loadHmFeedback = useCallback(() => {
+    authFetch(`${BACKEND_URL}/jobs/${job.id}/hm-feedback`)
+      .then(r => r.json())
+      .then(d => setHmFeedback(d.feedback || []))
+      .catch(() => setHmFeedback([]));
+  }, [job.id, authFetch]);
 
   useEffect(() => {
     (async () => {
@@ -518,7 +553,98 @@ function JobDetail({ job, authFetch, onBack, onEdit, onDelete }) {
       .then(r => r.json())
       .then(d => setEnhancement(d.enhancement || null))
       .catch(() => setEnhancement(null));
-  }, [job.id, authFetch]);
+
+    loadAssignees();
+    loadHms();
+    loadHmFeedback();
+  }, [job.id, authFetch, loadAssignees, loadHms, loadHmFeedback]);
+
+  const openAddHm = async () => {
+    setShowAddHm(true);
+    if (teamPool.length) return;
+    try {
+      const r = await authFetch(`${BACKEND_URL}/admin/team-pool`);
+      const d = await r.json();
+      setTeamPool(d.members || []);
+    } catch { setTeamPool([]); }
+  };
+
+  const addHm = async (userId) => {
+    setAssignBusy(true);
+    try {
+      const r = await authFetch(`${BACKEND_URL}/jobs/${job.id}/hiring-managers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setHms(d.hiring_managers || []);
+        setShowAddHm(false);
+      } else {
+        alert(d.error || 'Failed to attach hiring manager.');
+      }
+    } finally { setAssignBusy(false); }
+  };
+
+  const removeHm = async (userId) => {
+    if (!confirm('Remove this hiring manager from the job?')) return;
+    setAssignBusy(true);
+    try {
+      const r = await authFetch(`${BACKEND_URL}/jobs/${job.id}/hiring-managers/${userId}`, { method: 'DELETE' });
+      const d = await r.json();
+      if (r.ok) setHms(d.hiring_managers || []);
+      else      alert(d.error || 'Failed to remove hiring manager.');
+    } finally { setAssignBusy(false); }
+  };
+
+  const openAddAssignee = async () => {
+    setShowAddAssignee(true);
+    if (teamPool.length) return;
+    try {
+      const r = await authFetch(`${BACKEND_URL}/admin/team-pool`);
+      const d = await r.json();
+      setTeamPool(d.members || []);
+    } catch { setTeamPool([]); }
+  };
+
+  const addAssignee = async (userId, roleOnJob) => {
+    setAssignBusy(true);
+    try {
+      const r = await authFetch(`${BACKEND_URL}/jobs/${job.id}/assignees`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, role_on_job: roleOnJob }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setAssignees(d.assignees || []);
+        setShowAddAssignee(false);
+      } else {
+        alert(d.error || 'Failed to add assignee.');
+      }
+    } finally { setAssignBusy(false); }
+  };
+
+  const removeAssignee = async (userId) => {
+    if (!confirm('Remove this teammate from the job?')) return;
+    setAssignBusy(true);
+    try {
+      const r = await authFetch(`${BACKEND_URL}/jobs/${job.id}/assignees/${userId}`, { method: 'DELETE' });
+      const d = await r.json();
+      if (r.ok) setAssignees(d.assignees || []);
+      else      alert(d.error || 'Failed to remove assignee.');
+    } finally { setAssignBusy(false); }
+  };
+
+  const ROLE_LABEL = { lead: 'Lead', collaborator: 'Collaborator', sourcer: 'Sourcer' };
+  const ROLE_COLOR = {
+    lead:         { bg: 'rgba(249,115,22,0.12)', color: '#ea580c', border: 'rgba(249,115,22,0.3)' },
+    collaborator: { bg: 'rgba(59,130,246,0.12)', color: '#2563eb', border: 'rgba(59,130,246,0.3)' },
+    sourcer:      { bg: 'rgba(124,58,237,0.12)', color: '#7c3aed', border: 'rgba(124,58,237,0.3)' },
+  };
+  const assignedUserIds = new Set(assignees.map(a => a.user_id));
+  const eligible = teamPool.filter(m => !assignedUserIds.has(m.id));
 
   const copyAssetTab = (tabKey) => {
     const tab = JD_ASSET_TABS.find(t => t.key === tabKey);
@@ -542,8 +668,8 @@ function JobDetail({ job, authFetch, onBack, onEdit, onDelete }) {
       <div className="jd-detail-header">
         <button className="ag-btn ag-btn--ghost" onClick={onBack}>← Back to Jobs</button>
         <div className="jd-detail-actions">
-          <button className="ag-btn ag-btn--ghost" onClick={() => onEdit(job)}>Edit Job</button>
-          <button className="ag-btn ag-btn--danger" onClick={() => onDelete(job.id)}>Delete</button>
+          {canEdit   && <button className="ag-btn ag-btn--ghost"  onClick={() => onEdit(job)}>Edit Job</button>}
+          {canAssign && <button className="ag-btn ag-btn--danger" onClick={() => onDelete(job.id)}>Delete</button>}
         </div>
       </div>
 
@@ -612,6 +738,257 @@ function JobDetail({ job, authFetch, onBack, onEdit, onDelete }) {
             <p className="jd-section-label">Preferred Skills</p>
             <div className="ag-skill-preview">
               {job.preferred_skills.map(s => <span key={s} className="skill-chip">{s}</span>)}
+            </div>
+          </div>
+        )}
+
+        {/* Team / Assignees */}
+        <div className="jd-detail-section">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <p className="jd-section-label" style={{ margin: 0 }}>Team</p>
+            {canAssign && (
+              <button className="ag-btn ag-btn--ghost ag-btn--sm" onClick={openAddAssignee} disabled={assignBusy}>
+                + Add Assignee
+              </button>
+            )}
+          </div>
+          <div className="ag-skill-preview" style={{ gap: 8 }}>
+            {assignees.length === 0 && <span style={{ color: 'var(--text-3)', fontSize: 13 }}>No assignees yet.</span>}
+            {assignees.map(a => {
+              const c = ROLE_COLOR[a.role_on_job] || ROLE_COLOR.collaborator;
+              return (
+                <span key={a.id} className="skill-chip"
+                  style={{
+                    background: c.bg, color: c.color, border: `1px solid ${c.border}`,
+                    display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px',
+                  }}
+                >
+                  <strong style={{ fontWeight: 600 }}>{a.display_name || a.email}</strong>
+                  <span style={{ fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.85 }}>
+                    {ROLE_LABEL[a.role_on_job]}
+                  </span>
+                  {canAssign && assignees.length > 1 && (
+                    <button
+                      onClick={() => removeAssignee(a.user_id)}
+                      disabled={assignBusy}
+                      title="Remove"
+                      style={{
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        color: c.color, fontSize: 14, padding: 0, marginLeft: 2, lineHeight: 1,
+                      }}
+                    >×</button>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Hiring Managers */}
+        <div className="jd-detail-section">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <p className="jd-section-label" style={{ margin: 0 }}>Hiring Managers</p>
+            {canAssign && (
+              <button className="ag-btn ag-btn--ghost ag-btn--sm" onClick={openAddHm} disabled={assignBusy}>
+                + Add Hiring Manager
+              </button>
+            )}
+          </div>
+          <div className="ag-skill-preview" style={{ gap: 8 }}>
+            {hms.length === 0 && <span style={{ color: 'var(--text-3)', fontSize: 13 }}>No hiring managers attached.</span>}
+            {hms.map(h => (
+              <span key={h.id} className="skill-chip"
+                style={{
+                  background: 'rgba(16,185,129,0.10)', color: '#059669',
+                  border: '1px solid rgba(16,185,129,0.3)',
+                  display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px',
+                }}
+              >
+                <strong style={{ fontWeight: 600 }}>{h.display_name || h.email}</strong>
+                <span style={{ fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase', opacity: 0.85 }}>HM</span>
+                {canAssign && (
+                  <button
+                    onClick={() => removeHm(h.user_id)}
+                    disabled={assignBusy}
+                    title="Remove"
+                    style={{
+                      background: 'transparent', border: 'none', cursor: 'pointer',
+                      color: '#059669', fontSize: 14, padding: 0, marginLeft: 2, lineHeight: 1,
+                    }}
+                  >×</button>
+                )}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* HM Feedback received */}
+        {hmFeedback.length > 0 && (() => {
+          const REC_LABEL = { strong_yes: 'Strong Yes', yes: 'Yes', maybe: 'Maybe', no: 'No', strong_no: 'Strong No' };
+          const REC_COLOR = {
+            strong_yes: '#10b981', yes: '#34d399', maybe: '#f59e0b', no: '#f87171', strong_no: '#dc2626',
+          };
+          // Group feedback by candidate.
+          const byCand = new Map();
+          for (const fb of hmFeedback) {
+            if (!byCand.has(fb.candidate_id)) byCand.set(fb.candidate_id, { name: fb.candidate_name, title: fb.candidate_title, items: [] });
+            byCand.get(fb.candidate_id).items.push(fb);
+          }
+          return (
+            <div className="jd-detail-section">
+              <p className="jd-section-label">Hiring Manager Feedback ({hmFeedback.length})</p>
+              <div style={{ display: 'grid', gap: 10 }}>
+                {[...byCand.values()].map(group => (
+                  <div key={group.name} style={{
+                    background: 'var(--bg-card)', border: '1px solid var(--border)',
+                    borderRadius: 10, padding: '12px 14px',
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', marginBottom: 2 }}>{group.name}</div>
+                    {group.title && <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8 }}>{group.title}</div>}
+                    {group.items.map(fb => {
+                      const c = REC_COLOR[fb.recommendation] || '#94a3b8';
+                      return (
+                        <div key={fb.id} style={{
+                          marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-subtle)',
+                          display: 'flex', flexDirection: 'column', gap: 4,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: 12, color: 'var(--text-1)' }}>{fb.hm_display_name || fb.hm_email}</strong>
+                            {fb.recommendation && (
+                              <span style={{
+                                fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
+                                padding: '2px 8px', borderRadius: 999,
+                                background: `${c}18`, color: c, border: `1px solid ${c}40`,
+                              }}>{REC_LABEL[fb.recommendation] || fb.recommendation}</span>
+                            )}
+                            <span style={{ fontSize: 10, color: 'var(--text-3)', marginLeft: 'auto' }}>
+                              {fb.updated_at ? new Date(fb.updated_at.replace(' ', 'T') + 'Z').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                            </span>
+                          </div>
+                          {fb.notes && (
+                            <div style={{
+                              fontSize: 12, color: 'var(--text-2)', lineHeight: 1.55,
+                              fontStyle: 'italic',
+                              borderLeft: '3px solid var(--border)',
+                              paddingLeft: 10,
+                            }}>
+                              "{fb.notes}"
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {showAddHm && (
+          <div
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+            }}
+            onClick={() => setShowAddHm(false)}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 12, padding: 20, width: 460, maxWidth: '92vw', maxHeight: '80vh', overflow: 'auto',
+              }}
+            >
+              <h3 style={{ margin: '0 0 12px', fontSize: 16 }}>Attach Hiring Manager</h3>
+              {(() => {
+                const attachedIds = new Set(hms.map(h => h.user_id));
+                const pool = teamPool.filter(m => m.role === 'hiring_manager' && !attachedIds.has(m.id));
+                if (pool.length === 0) {
+                  return (
+                    <p style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                      No eligible hiring managers found. Add one from <em>Settings → Team</em>{' '}
+                      with role <strong>Hiring Manager</strong>, then come back here.
+                    </p>
+                  );
+                }
+                return pool.map(m => (
+                  <div key={m.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px',
+                    borderBottom: '1px solid var(--border-subtle)',
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{m.display_name || m.email}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{m.email}</div>
+                    </div>
+                    <button
+                      className="ag-btn ag-btn--primary ag-btn--sm"
+                      disabled={assignBusy}
+                      onClick={() => addHm(m.id)}
+                    >Attach</button>
+                  </div>
+                ));
+              })()}
+              <div style={{ marginTop: 14, textAlign: 'right' }}>
+                <button className="ag-btn ag-btn--ghost ag-btn--sm" onClick={() => setShowAddHm(false)}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showAddAssignee && (
+          <div
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+            }}
+            onClick={() => setShowAddAssignee(false)}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 12, padding: 20, width: 460, maxWidth: '92vw', maxHeight: '80vh', overflow: 'auto',
+              }}
+            >
+              <h3 style={{ margin: '0 0 12px', fontSize: 16 }}>Add Assignee</h3>
+              {eligible.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                  Everyone in your company is already on this job.
+                  Add new teammates from <em>Settings → Team</em>.
+                </p>
+              ) : eligible.map(m => (
+                <div key={m.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px',
+                  borderBottom: '1px solid var(--border-subtle)',
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{m.display_name || m.email}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{m.email} · {m.role}</div>
+                  </div>
+                  <select
+                    defaultValue="collaborator"
+                    onChange={e => e.currentTarget.dataset.role = e.target.value}
+                    style={{ fontSize: 12, padding: '4px 8px' }}
+                    id={`role-${m.id}`}
+                  >
+                    <option value="lead">Lead</option>
+                    <option value="collaborator">Collaborator</option>
+                    <option value="sourcer">Sourcer</option>
+                  </select>
+                  <button
+                    className="ag-btn ag-btn--primary ag-btn--sm"
+                    disabled={assignBusy}
+                    onClick={() => {
+                      const sel = document.getElementById(`role-${m.id}`);
+                      addAssignee(m.id, sel ? sel.value : 'collaborator');
+                    }}
+                  >Add</button>
+                </div>
+              ))}
+              <div style={{ marginTop: 14, textAlign: 'right' }}>
+                <button className="ag-btn ag-btn--ghost ag-btn--sm" onClick={() => setShowAddAssignee(false)}>Close</button>
+              </div>
             </div>
           </div>
         )}
@@ -745,10 +1122,11 @@ function JobDetail({ job, authFetch, onBack, onEdit, onDelete }) {
 }
 
 // ── Main jobs module ─────────────────────────────────────────────────────────
-export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout, onBack }) {
+export default function JobsModule({ authFetch, userRole, isLight, onToggleTheme, onLogout, onBack }) {
   const [jobs,        setJobs]        = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [statusFilter,setStatusFilter]= useState('all');
+  const [assignFilter,setAssignFilter]= useState('all'); // 'all' | 'me'
   const [search,      setSearch]      = useState('');
   const [view,        setView]        = useState('list'); // 'list' | 'form' | 'detail'
   const [editJob,     setEditJob]     = useState(null);
@@ -758,12 +1136,18 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [qualifyJobId,  setQualifyJobId]  = useState(null);
 
+  // Roles that can create / edit / delete jobs. Read-only roles (sourcer,
+  // hiring_manager) see the list but no mutation buttons.
+  const canMutate = ['owner', 'team_lead', 'sr_recruiter', 'recruiter',
+                     'admin', 'superuser', 'subuser'].includes(userRole);
+
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.set('status', statusFilter);
-      if (search.trim()) params.set('search', search.trim());
+      if (statusFilter !== 'all')          params.set('status', statusFilter);
+      if (assignFilter === 'me')           params.set('assigned_to', 'me');
+      if (search.trim())                   params.set('search', search.trim());
       const res  = await authFetch(`${BACKEND_URL}/jobs?${params}`);
       const data = await res.json();
       setJobs(data.jobs || []);
@@ -772,7 +1156,7 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
     } finally {
       setLoading(false);
     }
-  }, [authFetch, statusFilter, search]);
+  }, [authFetch, statusFilter, assignFilter, search]);
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
 
@@ -812,6 +1196,7 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
           <JobDetail
             job={detailJob}
             authFetch={authFetch}
+            userRole={userRole}
             onBack={() => setView('list')}
             onEdit={openEdit}
             onDelete={(id) => { setDeleteId(id); setView('list'); }}
@@ -857,6 +1242,20 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
         {/* Toolbar */}
         <div className="ag-toolbar">
           <div className="ag-status-tabs">
+            <button
+              className={`ag-status-tab${assignFilter === 'all' ? ' active' : ''}`}
+              onClick={() => setAssignFilter('all')}
+            >
+              All Jobs
+            </button>
+            <button
+              className={`ag-status-tab${assignFilter === 'me' ? ' active' : ''}`}
+              onClick={() => setAssignFilter('me')}
+            >
+              My Jobs
+            </button>
+          </div>
+          <div className="ag-status-tabs">
             {STATUS_TABS.map(t => (
               <button
                 key={t.value}
@@ -873,8 +1272,12 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          <button className="ag-btn ag-btn--ghost" onClick={() => setShowBulkUpload(true)}>📤 Bulk Upload</button>
-          <button className="ag-btn ag-btn--primary" onClick={openCreate}>+ New Job</button>
+          {canMutate && (
+            <>
+              <button className="ag-btn ag-btn--ghost" onClick={() => setShowBulkUpload(true)}>📤 Bulk Upload</button>
+              <button className="ag-btn ag-btn--primary" onClick={openCreate}>+ New Job</button>
+            </>
+          )}
         </div>
 
         {/* Table */}
@@ -892,6 +1295,7 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
                 <tr>
                   <th>Title</th>
                   <th>Client</th>
+                  <th>Lead</th>
                   <th>Location</th>
                   <th>Type</th>
                   <th>Exp</th>
@@ -912,6 +1316,7 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
                         {job.is_qualified && <span className="ag-qualified-badge">✓ Qualified</span>}
                       </td>
                       <td className="ag-td-muted">{job.client_name || '—'}</td>
+                      <td className="ag-td-muted">{job.lead_name   || '—'}</td>
                       <td className="ag-td-muted">{job.location    || '—'}</td>
                       <td className="ag-td-muted">{job.employment_type}</td>
                       <td className="ag-td-muted">
@@ -937,11 +1342,16 @@ export default function JobsModule({ authFetch, isLight, onToggleTheme, onLogout
                       </td>
                       <td>
                         <div className="ag-row-actions">
-                          {!job.is_qualified && (
+                          {canMutate && !job.is_qualified && (
                             <button className="ag-action-btn ag-action-btn--qualify" onClick={() => setQualifyJobId(job.id)}>Qualify</button>
                           )}
-                          <button className="ag-action-btn" onClick={() => openEdit(job)}>Edit</button>
-                          <button className="ag-action-btn ag-action-btn--danger" onClick={() => setDeleteId(job.id)}>Delete</button>
+                          {canMutate && (
+                            <>
+                              <button className="ag-action-btn" onClick={() => openEdit(job)}>Edit</button>
+                              <button className="ag-action-btn ag-action-btn--danger" onClick={() => setDeleteId(job.id)}>Delete</button>
+                            </>
+                          )}
+                          {!canMutate && <span className="ag-td-muted" style={{ fontSize: 11 }}>Read-only</span>}
                         </div>
                       </td>
                     </tr>

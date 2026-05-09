@@ -227,7 +227,18 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* Slim, theme-aware scrollbar — Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
 }
+/* Slim, theme-aware scrollbar — Chromium / WebKit */
+.sidebar-nav::-webkit-scrollbar { width: 4px; }
+.sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.20);
+  border-radius: 3px;
+}
+.sidebar-nav:hover::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.40); }
 .nav-group { display: flex; flex-direction: column; gap: 1px; margin-bottom: 8px; }
 .nav-section-label {
   font-size: 10px;
@@ -2404,16 +2415,16 @@ body {
   opacity: 0.7;
 }
 
-/* Candidate entries: blue tint */
+/* Candidate entries: light blue tint (light mode) */
 .transcript-entry.speaker-candidate.final {
-  background: hsl(220, 45%, 14%);
-  border-color: hsl(220, 55%, 28%);
+  background: hsl(220, 90%, 97%);
+  border-color: hsl(220, 70%, 88%);
 }
 
-/* Recruiter entries: orange tint */
+/* Recruiter entries: light orange tint (light mode) */
 .transcript-entry.speaker-recruiter.final {
-  background: hsl(24, 45%, 12%);
-  border-color: hsl(24, 60%, 25%);
+  background: hsl(24, 100%, 97%);
+  border-color: hsl(24, 90%, 87%);
 }
 
 .transcript-entry.speaker-candidate .entry-label { color: var(--blue); }

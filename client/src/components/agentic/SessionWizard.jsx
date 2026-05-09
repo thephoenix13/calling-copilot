@@ -79,7 +79,10 @@ const JD_TABS = [
   { key: 'keywords',  label: 'Keywords',        field: 'sourcingKeywords'       },
 ];
 
-export default function SessionWizard({ sessionId, authFetch, isLight, onToggleTheme, onLogout, onBack, onScreenViaCall }) {
+export default function SessionWizard({ sessionId, authFetch, userRole, isLight, onToggleTheme, onLogout, onBack, onScreenViaCall }) {
+  // Sourcers source candidates (Step 3 only). Steps 4–8 are out of scope for them.
+  const isSourcer = userRole === 'sourcer';
+  const SOURCER_MAX_STEP = 3;
   const [session,     setSession]     = useState(null);
   const [loading,     setLoading]     = useState(true);
   const [activeStep,  setActiveStep]  = useState(null);
@@ -210,18 +213,21 @@ export default function SessionWizard({ sessionId, authFetch, isLight, onToggleT
       {/* Step indicator */}
       <div className="sw-step-bar">
         {STEPS.map((step, i) => {
-          const unlocked = isStepUnlocked(step.n, session);
-          const done     = step.n < session.current_step;
-          const active   = step.n === currentActive;
-          const locked   = !unlocked && !done;
+          const unlocked        = isStepUnlocked(step.n, session);
+          const done            = step.n < session.current_step;
+          const active          = step.n === currentActive;
+          const lockedForSourcer = isSourcer && step.n > SOURCER_MAX_STEP;
+          const locked          = (!unlocked && !done) || lockedForSourcer;
 
           return (
             <button
               key={step.n}
               className={`sw-step-btn${active ? ' sw-step-btn--active' : done ? ' sw-step-btn--done' : locked ? ' sw-step-btn--locked' : ''}`}
-              onClick={() => unlocked && setActiveStep(step.n)}
+              onClick={() => !locked && setActiveStep(step.n)}
               disabled={locked}
-              title={locked ? `Complete step ${step.n - 1} first` : step.label}
+              title={lockedForSourcer
+                ? 'Sourcers source candidates (Step 3) — the rest of the pipeline is handled by recruiters.'
+                : locked ? `Complete step ${step.n - 1} first` : step.label}
             >
               <span className="sw-step-num">{done ? '✓' : step.n}</span>
               <span className="sw-step-label">{step.label}</span>
@@ -229,6 +235,17 @@ export default function SessionWizard({ sessionId, authFetch, isLight, onToggleT
           );
         })}
       </div>
+
+      {isSourcer && (
+        <div style={{
+          margin: '12px 0 16px', padding: '10px 14px',
+          background: 'rgba(124, 58, 237, 0.08)', border: '1px solid rgba(124, 58, 237, 0.25)',
+          borderRadius: 8, fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.55,
+        }}>
+          <strong style={{ color: '#7c3aed' }}>Sourcer view —</strong>
+          {' '}you can add candidates and run AI evaluations in Step 3. Steps 4–8 are read-only or disabled; recruiters take over from there.
+        </div>
+      )}
 
       {/* Step content */}
       <div className="sw-step-content">

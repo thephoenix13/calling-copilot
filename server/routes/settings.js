@@ -3,31 +3,25 @@ const router  = express.Router();
 const bcrypt  = require('bcrypt');
 const { db }  = require('../db');
 const auth    = require('../middleware/auth');
+const { requireRole } = require('../middleware/permissions');
 
 router.use(auth);
 
-// ── Guard: only superuser may use this router ─────────────────────────────────
-function requireSuperuser(req, res, next) {
-  if (req.user.role !== 'superuser') {
-    return res.status(403).json({ error: 'Superuser access required.' });
-  }
-  next();
-}
-router.use(requireSuperuser);
+// ── Guard: only the company Owner may use this router ────────────────────────
+router.use(requireRole('owner'));
 
-// ── Helper: resolve superuser's company_id ────────────────────────────────────
-function getSuperuserCompany(userId) {
+// ── Helper: resolve owner's company_id ───────────────────────────────────────
+function getOwnerCompany(userId) {
   const user = db.prepare('SELECT company_id FROM users WHERE id = ?').get(userId);
   return user?.company_id || null;
 }
-
 // ══════════════════════════════════════════════════════════════════════════════
 // Company
 // ══════════════════════════════════════════════════════════════════════════════
 
 // GET /settings/company
 router.get('/company', (req, res) => {
-  const companyId = getSuperuserCompany(req.user.id);
+  const companyId = getOwnerCompany(req.user.id);
   if (!companyId) return res.status(404).json({ error: 'No company found.' });
 
   const company = db.prepare('SELECT * FROM companies WHERE id = ?').get(companyId);
@@ -38,7 +32,7 @@ router.get('/company', (req, res) => {
 
 // PUT /settings/company
 router.put('/company', (req, res) => {
-  const companyId = getSuperuserCompany(req.user.id);
+  const companyId = getOwnerCompany(req.user.id);
   if (!companyId) return res.status(404).json({ error: 'No company found.' });
 
   const { name, industry, website, address, contact_email, logo_url } = req.body;
@@ -68,7 +62,7 @@ router.put('/company', (req, res) => {
 
 // GET /settings/team
 router.get('/team', (req, res) => {
-  const companyId = getSuperuserCompany(req.user.id);
+  const companyId = getOwnerCompany(req.user.id);
   if (!companyId) return res.json({ members: [] });
 
   const members = db.prepare(`
@@ -92,11 +86,11 @@ router.post('/team', async (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters.' });
   }
 
-  const allowedRoles = ['admin', 'subuser'];
-  const memberRole = allowedRoles.includes(role) ? role : 'admin';
+  const allowedRoles = ['team_lead', 'sr_recruiter', 'recruiter', 'sourcer', 'hiring_manager'];
+  const memberRole = allowedRoles.includes(role) ? role : 'recruiter';
 
-  const companyId = getSuperuserCompany(req.user.id);
-  if (!companyId) return res.status(500).json({ error: 'Superuser has no company.' });
+  const companyId = getOwnerCompany(req.user.id);
+  if (!companyId) return res.status(500).json({ error: 'Owner has no company.' });
 
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.trim());
   if (existing) return res.status(409).json({ error: 'An account with this email already exists.' });
@@ -121,7 +115,7 @@ router.post('/team', async (req, res) => {
 
 // PUT /settings/team/:id — update name, email, role, is_active
 router.put('/team/:id', async (req, res) => {
-  const companyId = getSuperuserCompany(req.user.id);
+  const companyId = getOwnerCompany(req.user.id);
   const member = db.prepare(
     'SELECT id, company_id FROM users WHERE id = ?'
   ).get(req.params.id);
@@ -131,7 +125,7 @@ router.put('/team/:id', async (req, res) => {
   }
 
   const { display_name, email, role, is_active, password } = req.body;
-  const allowedRoles = ['admin', 'subuser'];
+  const allowedRoles = ['team_lead', 'sr_recruiter', 'recruiter', 'sourcer', 'hiring_manager'];
 
   const updates = [];
   const values  = [];
@@ -162,7 +156,7 @@ router.put('/team/:id', async (req, res) => {
 
 // DELETE /settings/team/:id — deactivate (soft delete)
 router.delete('/team/:id', (req, res) => {
-  const companyId = getSuperuserCompany(req.user.id);
+  const companyId = getOwnerCompany(req.user.id);
   const member = db.prepare('SELECT id, company_id FROM users WHERE id = ?').get(req.params.id);
 
   if (!member || member.company_id !== companyId) {
@@ -174,7 +168,7 @@ router.delete('/team/:id', (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Account (superuser's own profile)
+// Account (owner's own profile)
 // ══════════════════════════════════════════════════════════════════════════════
 
 // PUT /settings/account

@@ -135,7 +135,7 @@ function TeamTab({ authFetch }) {
   const [error,    setError]    = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editId,   setEditId]   = useState(null);
-  const [form,     setForm]     = useState({ email: '', display_name: '', password: '', role: 'admin' });
+  const [form,     setForm]     = useState({ email: '', display_name: '', password: '', role: 'recruiter' });
   const [saving,   setSaving]   = useState(false);
   const [formErr,  setFormErr]  = useState('');
 
@@ -152,7 +152,7 @@ function TeamTab({ authFetch }) {
 
   const openCreate = () => {
     setEditId(null);
-    setForm({ email: '', display_name: '', password: '', role: 'admin' });
+    setForm({ email: '', display_name: '', password: '', role: 'recruiter' });
     setFormErr('');
     setShowForm(true);
   };
@@ -200,7 +200,18 @@ function TeamTab({ authFetch }) {
     fetchMembers();
   };
 
-  const ROLE_LABELS = { admin: 'Recruiter (Admin)', subuser: 'Recruiter (Sub-user)' };
+  const ROLE_LABELS = {
+    owner:          'Owner',
+    team_lead:      'Team Lead',
+    sr_recruiter:   'Sr Recruiter',
+    recruiter:      'Recruiter',
+    sourcer:        'Sourcer',
+    hiring_manager: 'Hiring Manager',
+    // Legacy values still in old JWTs / DB rows that haven't been migrated yet.
+    admin:          'Recruiter (legacy admin)',
+    subuser:        'Recruiter (legacy)',
+    superuser:      'Owner (legacy)',
+  };
 
   return (
     <div className="sett-section">
@@ -287,8 +298,11 @@ function TeamTab({ authFetch }) {
                     value={form.role}
                     onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
                   >
-                    <option value="admin">Recruiter (Admin)</option>
-                    <option value="subuser">Recruiter (Sub-user)</option>
+                    <option value="team_lead">Team Lead — manages a team, reviews QA</option>
+                    <option value="sr_recruiter">Sr Recruiter — leads complex roles</option>
+                    <option value="recruiter">Recruiter — runs the pipeline</option>
+                    <option value="sourcer">Sourcer — sources only, no decisions</option>
+                    <option value="hiring_manager">Hiring Manager — external client stakeholder</option>
                   </select>
                 </label>
               </div>
@@ -307,7 +321,18 @@ function TeamTab({ authFetch }) {
 }
 
 // ── Account Tab ───────────────────────────────────────────────────────────────
-function AccountTab({ authFetch }) {
+function AccountTab({ authFetch, userRole, displayName }) {
+  const ROLE_DISPLAY = {
+    owner:          'Owner',
+    team_lead:      'Team Lead',
+    sr_recruiter:   'Sr Recruiter',
+    recruiter:      'Recruiter',
+    sourcer:        'Sourcer',
+    hiring_manager: 'Hiring Manager',
+    admin:          'Owner (legacy)',
+    superuser:      'Owner (legacy)',
+    subuser:        'Recruiter (legacy)',
+  };
   const [form,    setForm]    = useState({ display_name: '', password: '', confirmPassword: '' });
   const [saving,  setSaving]  = useState(false);
   const [saved,   setSaved]   = useState(false);
@@ -343,6 +368,28 @@ function AccountTab({ authFetch }) {
     <div className="sett-section">
       <div className="sett-section-title">My Account</div>
       {error && <div className="sett-error">{error}</div>}
+
+      <div style={{
+        maxWidth: 420, marginBottom: 18,
+        padding: '12px 14px',
+        background: 'var(--orange-dim, rgba(249,115,22,0.10))',
+        border: '1px solid var(--orange-border, rgba(249,115,22,0.30))',
+        borderRadius: 10,
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>
+          Signed in as
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-1)' }}>
+          {displayName || '—'}
+          <span style={{
+            display: 'inline-block', marginLeft: 10, fontSize: 11, fontWeight: 700,
+            padding: '3px 10px', borderRadius: 999, letterSpacing: '0.05em',
+            background: '#F97316', color: '#fff',
+          }}>
+            {ROLE_DISPLAY[userRole] || userRole || '—'}
+          </span>
+        </div>
+      </div>
 
       <div className="sett-form-stack" style={{ maxWidth: 420 }}>
         <label className="sett-label">
@@ -388,7 +435,7 @@ function AccountTab({ authFetch }) {
 }
 
 // ── Main SettingsModule ───────────────────────────────────────────────────────
-export default function SettingsModule({ authFetch }) {
+export default function SettingsModule({ authFetch, userRole, displayName }) {
   const [activeTab, setActiveTab] = useState('company');
 
   return (
@@ -412,7 +459,7 @@ export default function SettingsModule({ authFetch }) {
       <div className="sett-content">
         {activeTab === 'company' && <CompanyTab authFetch={authFetch} />}
         {activeTab === 'team'    && <TeamTab    authFetch={authFetch} />}
-        {activeTab === 'account' && <AccountTab authFetch={authFetch} />}
+        {activeTab === 'account' && <AccountTab authFetch={authFetch} userRole={userRole} displayName={displayName} />}
       </div>
     </div>
   );

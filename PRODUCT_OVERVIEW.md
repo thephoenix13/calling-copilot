@@ -103,7 +103,20 @@ A comprehensive analytics module covering the full hiring funnel. Loads two data
 
 ---
 
-### 12. Settings *(Superuser only)*
+### 12. Recruiter QA
+A coaching-focused view that surfaces every saved Per-Call QA Report in one place, so recruiters and team leads can spot patterns, weak dimensions, and calls that need review.
+
+**KPI strip** across the top: Calls Reviewed, Avg QA Score, Needs Coaching % (calls below 70), and the most common Weakest Dimension across all reviewed calls.
+
+**Searchable list** of every reviewed call with: recruiter, candidate, role, date, duration, color-coded QA score (red < 45, amber 45–69, green ≥ 70), submission verdict pill, risk level pill, and the weakest dimension for that specific call. Search across recruiter / candidate / role; sort by most recent, lowest score, or highest score.
+
+**Drill-down:** Clicking any row opens the full Per-Call QA Report inline — same evidence-grounded scorecard, red flags, and weak vs. better coaching nudges that are generated when a call ends in Calling CoPilot.
+
+**Where the data comes from:** QA reports are AI-generated and persisted automatically when a call ends in Calling CoPilot. Recruiter QA reads them directly — no extra setup. If no calls have produced reports yet, the module shows an empty state pointing to Calling CoPilot.
+
+---
+
+### 13. Settings *(Superuser only)*
 Available to account owners (superuser role). Three tabs:
 - **Company Info** — name, industry, website, address, contact email
 - **Team Management** — create recruiter accounts, set roles, activate or deactivate members
@@ -150,8 +163,8 @@ Platforms compared: Greenhouse, Lever, Workday, iCIMS, ZOHO Recruit, CEIPAL, Sma
 | Source-to-hire conversion / ROI | ✅ | ❌ |
 | Offer acceptance rate | ✅ | ❌ |
 | Cost-per-hire | ✅ | ❌ |
-| Recruiter performance scorecards | ✅ | ❌ |
-| Multi-recruiter comparison | ✅ | ❌ |
+| Recruiter performance scorecards | ✅ | ✅ native — AI-graded per-call QA |
+| Multi-recruiter comparison | ✅ | 🔶 list view with recruiter column |
 | DEI / diversity funnel | ✅ | ❌ |
 | Candidate assessment analytics | ✅ (via integrations) | ✅ native — MCQ + Coding |
 | Video interview analytics | ✅ (via HireVue etc.) | ✅ native |
@@ -171,9 +184,9 @@ Platforms compared: Greenhouse, Lever, Workday, iCIMS, ZOHO Recruit, CEIPAL, Sma
 | Scheduled email reports | ✅ | ❌ |
 | BI tool integration (PowerBI, Looker) | ✅ | ❌ |
 
-**Where Zeople leads:** AI-native features that no standard ATS offers — call scoring, AI resume content check, native video interview analytics, post-offer risk scoring, and per-session hiring-drive analytics.
+**Where Zeople leads:** AI-native features that no standard ATS offers — call scoring, recruiter QA scorecards with coaching nudges, AI resume content check, native video interview analytics, post-offer risk scoring, and per-session hiring-drive analytics.
 
-**Key gaps vs. enterprise ATS:** Source of hire tracking, offer analytics, cost-per-hire, recruiter scorecards, and export / reporting infrastructure (CSV, scheduled reports, BI integrations).
+**Key gaps vs. enterprise ATS:** Source of hire tracking, offer analytics, cost-per-hire, aggregated multi-recruiter leaderboards (per-call scorecards exist; team-level comparison is on the roadmap), and export / reporting infrastructure (CSV, scheduled reports, BI integrations).
 
 ---
 

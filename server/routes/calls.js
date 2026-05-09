@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db');
 const authMiddleware = require('../middleware/auth');
+const { requireCapability } = require('../middleware/permissions');
+const { visibleUserIds } = require('../utils/scoping');
 
 // POST /calls/start — create a call record linked to the authenticated user
-router.post('/start', authMiddleware, (req, res) => {
+router.post('/start', authMiddleware, requireCapability('calls.start'), (req, res) => {
   const { callSid, to = '', candidateName, roleTitle } = req.body;
 
   if (!callSid) {
@@ -30,7 +32,7 @@ router.post('/start', authMiddleware, (req, res) => {
 });
 
 // POST /calls/:callSid/reports — save QA + candidate reports
-router.post('/:callSid/reports', authMiddleware, (req, res) => {
+router.post('/:callSid/reports', authMiddleware, requireCapability('calls.start'), (req, res) => {
   const { callSid } = req.params;
   const { qaReport, candidateReport, jd, resume } = req.body;
 
@@ -67,7 +69,7 @@ router.post('/:callSid/reports', authMiddleware, (req, res) => {
 });
 
 // GET /calls/:callSid/reports — fetch saved reports for a call
-router.get('/:callSid/reports', authMiddleware, (req, res) => {
+router.get('/:callSid/reports', authMiddleware, requireCapability('calls.read'), (req, res) => {
   const { callSid } = req.params;
 
   const call = db.prepare('SELECT id FROM calls WHERE call_sid = ?').get(callSid);
@@ -84,16 +86,20 @@ router.get('/:callSid/reports', authMiddleware, (req, res) => {
   res.json(result);
 });
 
-// GET /calls — list calls for the authenticated user (most recent first)
-router.get('/', authMiddleware, (req, res) => {
+// GET /calls — list calls. Owners and Team Leads see every recruiter's calls
+// in the company; everyone else sees only their own.
+router.get('/', authMiddleware, requireCapability('calls.read'), (req, res) => {
+  const ids = visibleUserIds(req);
+  if (ids.length === 0) return res.json({ calls: [] });
+  const placeholders = ids.map(() => '?').join(',');
   const calls = db.prepare(
     `SELECT id, call_sid, candidate_phone, candidate_name, role_title, status,
-            started_at, ended_at, duration_sec, recording_filename
+            started_at, ended_at, duration_sec, recording_filename, user_id
      FROM calls
-     WHERE user_id = ?
+     WHERE user_id IN (${placeholders})
      ORDER BY started_at DESC
      LIMIT 50`
-  ).all(req.user.id);
+  ).all(...ids);
 
   res.json({ calls });
 });

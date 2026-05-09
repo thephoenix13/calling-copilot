@@ -1,33 +1,54 @@
+// Display labels used for the sidebar user chip. Mirrors the canonical names
+// used elsewhere in the app and accepts legacy JWT role values too.
+const ROLE_DISPLAY = {
+  owner:          'Owner',
+  team_lead:      'Team Lead',
+  sr_recruiter:   'Sr Recruiter',
+  recruiter:      'Recruiter',
+  sourcer:        'Sourcer',
+  hiring_manager: 'Hiring Manager',
+  admin:          'Owner',
+  superuser:      'Owner',
+  subuser:        'Recruiter',
+};
+
+// Per-item `hideFor` lists roles that shouldn't see the nav entry. Mirrors the
+// capability map on the server (permissions.js) — adjust both together.
 const NAV = [
   {
     section: null,
     items: [
       { id: 'dashboard',       label: 'Home',                icon: IconHome      },
-      { id: 'calling-copilot', label: 'Calling CoPilot',    icon: IconPhone    },
+      { id: 'calling-copilot', label: 'Calling CoPilot',     icon: IconPhone,     hideFor: ['sourcer'] },
       { id: 'jobs',            label: 'Job Management',      icon: IconBriefcase },
-      { id: 'candidates',      label: 'Candidate Database',  icon: IconUsers    },
-      { id: 'jd-enhancer',     label: 'JD Enhancer',         icon: IconZap      },
+      { id: 'candidates',      label: 'Candidate Database',  icon: IconUsers     },
+      { id: 'jd-enhancer',     label: 'JD Enhancer',         icon: IconZap,       hideFor: ['sourcer'] },
     ],
   },
   {
     section: 'Pipeline',
     items: [
       { id: 'sessions', label: 'Pipeline Sessions',    icon: IconGitBranch },
-      { id: 'pofu',     label: 'Post Offer Follow-Up', icon: IconTarget, badge: 'Beta' },
+      { id: 'pofu',     label: 'Post Offer Follow-Up', icon: IconTarget, badge: 'Beta', hideFor: ['sourcer'] },
     ],
   },
   {
     section: 'Evaluation',
     items: [
-      { id: 'video-interviews', label: 'Video Interviews',  icon: IconVideo     },
-      { id: 'mcq-assessments',     label: 'MCQ Assessments',    icon: IconClipboard },
-      { id: 'coding-assessments',  label: 'Coding Assessments', icon: IconCode      },
+      { id: 'video-interviews',    label: 'Video Interviews',   icon: IconVideo,     hideFor: ['sourcer'] },
+      { id: 'mcq-assessments',     label: 'MCQ Assessments',    icon: IconClipboard, hideFor: ['sourcer'] },
+      { id: 'coding-assessments',  label: 'Coding Assessments', icon: IconCode,      hideFor: ['sourcer'] },
     ],
   },
   {
     section: 'Insights',
     items: [
-      { id: 'reports', label: 'Reports & Analytics', icon: IconBarChart },
+      { id: 'reports',        label: 'Reports & Analytics', icon: IconBarChart },
+      { id: 'recruiter-qa',   label: 'Recruiter QA',        icon: IconAward    },
+      { id: 'market-intel',   label: 'Market Intelligence', icon: IconMarketIntel,
+        hideFor: ['sourcer','hiring_manager'] },
+      { id: 'activity',       label: 'Activity Feed',       icon: IconActivity,
+        hideFor: ['sr_recruiter','recruiter','sourcer','hiring_manager','subuser'] },
     ],
   },
 ];
@@ -100,6 +121,32 @@ function IconBarChart() {
     </svg>
   );
 }
+function IconAward() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="nav-icon">
+      <circle cx="12" cy="8" r="6"/>
+      <polyline points="8.21 13.89 7 22 12 19 17 22 15.79 13.88"/>
+    </svg>
+  );
+}
+function IconActivity() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="nav-icon">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+  );
+}
+function IconMarketIntel() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="nav-icon">
+      <line x1="3" y1="20" x2="21" y2="20"/>
+      <line x1="6" y1="20" x2="6" y2="13"/>
+      <line x1="11" y1="20" x2="11" y2="8"/>
+      <line x1="16" y1="20" x2="16" y2="11"/>
+      <polyline points="3 8 8 4 13 7 21 3"/>
+    </svg>
+  );
+}
 function IconTarget() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="nav-icon">
@@ -166,31 +213,35 @@ export default function AppShell({ children, currentView, onNavigate, isLight, o
           </div>
         </div>
 
-        {/* Nav */}
+        {/* Nav — filter items the current role can't access; drop empty sections */}
         <nav className="sidebar-nav">
-          {NAV.map((group, gi) => (
-            <div key={gi} className="nav-group">
-              {group.section && (
-                <div className="nav-section-label">{group.section}</div>
-              )}
-              {group.items.map(item => {
-                const Icon = item.icon;
-                const active = currentView === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    className={`nav-item${active ? ' nav-item--active' : ''}`}
-                    onClick={() => onNavigate(item.id)}
-                  >
-                    <Icon />
-                    <span className="nav-item-label">{item.label}</span>
-                    {item.badge && <span className="nav-badge">{item.badge}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-          {userRole === 'superuser' && (
+          {NAV.map((group, gi) => {
+            const visibleItems = group.items.filter(item => !item.hideFor?.includes(userRole));
+            if (visibleItems.length === 0) return null;
+            return (
+              <div key={gi} className="nav-group">
+                {group.section && (
+                  <div className="nav-section-label">{group.section}</div>
+                )}
+                {visibleItems.map(item => {
+                  const Icon = item.icon;
+                  const active = currentView === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      className={`nav-item${active ? ' nav-item--active' : ''}`}
+                      onClick={() => onNavigate(item.id)}
+                    >
+                      <Icon />
+                      <span className="nav-item-label">{item.label}</span>
+                      {item.badge && <span className="nav-badge">{item.badge}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+          {(userRole === 'owner' || userRole === 'superuser') && (
             <div className="nav-group">
               <div className="nav-section-label">Admin</div>
               <button
@@ -212,7 +263,15 @@ export default function AppShell({ children, currentView, onNavigate, isLight, o
           </button>
           <div className="sidebar-user">
             <div className="sidebar-user-avatar">{displayName ? displayName[0].toUpperCase() : 'U'}</div>
-            <span className="sidebar-user-name">{displayName || 'User'}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, lineHeight: 1.3 }}>
+              <span className="sidebar-user-name">{displayName || 'User'}</span>
+              <span style={{
+                fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+                color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase',
+              }}>
+                {ROLE_DISPLAY[userRole] || userRole || '—'}
+              </span>
+            </div>
             <button className="sidebar-signout" onClick={onLogout} title="Sign out">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>

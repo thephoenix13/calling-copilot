@@ -229,10 +229,19 @@ router.post('/take/:token/submit', (req, res) => {
 // ── AUTH middleware — all routes below require authentication ─────────────────
 router.use(auth);
 
+const { requireWrite, requireRead } = require('../middleware/permissions');
+const { visibleUserIds } = require('../utils/scoping');
+router.use(requireRead('assessments.read'));     // sourcers blocked entirely
+router.use(requireWrite('assessments.write'));   // hiring_managers blocked from mutations
+
 // ── Assessment CRUD ───────────────────────────────────────────────────────────
 
-// GET /assessments — list all assessments for this user
+// GET /assessments — list assessments. Owners and Team Leads see the team's;
+// everyone else sees only their own.
 router.get('/', (req, res) => {
+  const ids = visibleUserIds(req);
+  if (ids.length === 0) return res.json({ assessments: [] });
+  const placeholders = ids.map(() => '?').join(',');
   const rows = db.prepare(`
     SELECT a.*,
            COUNT(DISTINCT aq.id)  AS question_count,
@@ -244,10 +253,10 @@ router.get('/', (req, res) => {
     LEFT JOIN assessment_invites ai   ON ai.assessment_id  = a.id
     LEFT JOIN assessment_invites ai2  ON ai2.assessment_id = a.id AND ai2.status = 'completed'
     LEFT JOIN jobs j                  ON j.id = a.job_id
-    WHERE a.user_id = ?
+    WHERE a.user_id IN (${placeholders})
     GROUP BY a.id
     ORDER BY a.created_at DESC
-  `).all(req.user.id);
+  `).all(...ids);
 
   res.json({ assessments: rows });
 });
@@ -276,9 +285,12 @@ router.post('/', (req, res) => {
 
 // GET /assessments/:id — get assessment with questions, invites, and submissions
 router.get('/:id', (req, res) => {
+  const ids = visibleUserIds(req);
+  if (ids.length === 0) return res.status(404).json({ error: 'Not found.' });
+  const placeholders = ids.map(() => '?').join(',');
   const assessment = db.prepare(
-    'SELECT * FROM assessments WHERE id = ? AND user_id = ?'
-  ).get(req.params.id, req.user.id);
+    `SELECT * FROM assessments WHERE id = ? AND user_id IN (${placeholders})`
+  ).get(req.params.id, ...ids);
   if (!assessment) return res.status(404).json({ error: 'Not found.' });
 
   const questions = db.prepare(

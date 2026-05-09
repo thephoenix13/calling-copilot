@@ -49,17 +49,31 @@ router.post('/signup', async (req, res) => {
 
   try {
     const hash = await bcrypt.hash(password, 10);
-    const result = db.prepare(
-      'INSERT INTO users (email, password_hash, role, display_name) VALUES (?, ?, ?, ?)'
-    ).run(email, hash, 'subuser', name.trim());
+
+    // Create user + a personal company in one transaction so the new account
+    // never exists in a state where company_id is NULL.
+    const newUserId = db.transaction(() => {
+      const userRes = db.prepare(
+        'INSERT INTO users (email, password_hash, role, display_name) VALUES (?, ?, ?, ?)'
+      ).run(email, hash, 'recruiter', name.trim());
+      const userId = userRes.lastInsertRowid;
+
+      const coRes = db.prepare(
+        `INSERT INTO companies (owner_id, name, industry, contact_email)
+         VALUES (?, ?, ?, ?)`
+      ).run(userId, `${name.trim()}'s Workspace`, 'Recruitment', email);
+
+      db.prepare('UPDATE users SET company_id = ? WHERE id = ?').run(coRes.lastInsertRowid, userId);
+      return userId;
+    })();
 
     const token = jwt.sign(
-      { id: result.lastInsertRowid, email, role: 'subuser' },
+      { id: newUserId, email, role: 'recruiter' },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
 
-    res.status(201).json({ token, role: 'subuser', displayName: name.trim() });
+    res.status(201).json({ token, role: 'recruiter', displayName: name.trim() });
   } catch (err) {
     console.error('signup error:', err.message);
     res.status(500).json({ error: 'Signup failed. Please try again.' });

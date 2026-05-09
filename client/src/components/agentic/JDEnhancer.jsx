@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   FormattedJDTab, RecruiterBriefTab, ClarificationsTab,
-  ReachoutTab, KeywordsTab, MarketIntelligenceTab, DownloadDialog, stripMarkers,
+  ReachoutTab, KeywordsTab, DownloadDialog, stripMarkers,
   tryParse, CATEGORY_LABELS,
 } from './JDEnhancerTabs';
+import MarketIntelTabWrapper from './MarketIntelTabWrapper';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 const LS_SCRIPT_KEY = 'jde_company_script';
@@ -69,7 +70,7 @@ function SavedListModal({ savedList, onLoad, onDelete, onClose }) {
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
-export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, onLogout }) {
+export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, onLogout, userRole }) {
   // View
   const [view, setView]               = useState('input'); // 'input' | 'loading' | 'results'
   const [loadingStep, setLoadingStep] = useState(0);
@@ -728,10 +729,12 @@ export default function JDEnhancer({ authFetch, onBack, isLight, onToggleTheme, 
             )}
             {activeTab === 'keywords' && <KeywordsTab content={activeContent} />}
             {activeTab === 'market' && (
-              <MarketIntelligenceTab
-                content={activeContent}
-                onGenerate={handleGenerateMarketIntel}
-                generating={!!regenerating.market}
+              <MarketIntelTabWrapper
+                authFetch={authFetch}
+                userRole={userRole}
+                parsedJob={parsedJob}
+                jdText={jdText}
+                jobId={null}
               />
             )}
           </div>

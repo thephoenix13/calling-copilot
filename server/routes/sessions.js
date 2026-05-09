@@ -3,6 +3,9 @@ const router     = express.Router();
 const Anthropic  = require('@anthropic-ai/sdk');
 const { db }     = require('../db');
 const auth       = require('../middleware/auth');
+const { requireCapability } = require('../middleware/permissions');
+const { logActivity } = require('../utils/activity');
+const { visibleUserIds } = require('../utils/scoping');
 
 const anthropic = new Anthropic();
 
@@ -41,7 +44,17 @@ function parseSessionCandidate(sc) {
   };
 }
 
-function ownershipCheck(sessionId, userId) {
+function ownershipCheck(sessionId, userId, req) {
+  // Owners / Team Leads can access any session in their company.
+  if (req && (req.user.role === 'owner' || req.user.role === 'team_lead' ||
+              req.user.role === 'admin' || req.user.role === 'superuser')) {
+    const ids = visibleUserIds(req);
+    if (ids.length === 0) return null;
+    const placeholders = ids.map(() => '?').join(',');
+    return db.prepare(
+      `SELECT id FROM sessions WHERE id = ? AND user_id IN (${placeholders})`
+    ).get(sessionId, ...ids);
+  }
   return db.prepare('SELECT id FROM sessions WHERE id = ? AND user_id = ?')
     .get(sessionId, userId);
 }
@@ -71,8 +84,12 @@ function calcMatchScore(candidateSkills, requiredSkills, preferredSkills) {
   return Math.round(score * 100) / 100;
 }
 
-// ── GET / — list sessions for the authenticated user ────────────────────────
+// ── GET / — list sessions. Owners and Team Leads see the company's sessions;
+// everyone else sees only their own.
 router.get('/', (req, res) => {
+  const ids = visibleUserIds(req);
+  if (ids.length === 0) return res.json({ sessions: [] });
+  const placeholders = ids.map(() => '?').join(',');
   const rows = db.prepare(`
     SELECT
       s.*,
@@ -81,15 +98,15 @@ router.get('/', (req, res) => {
       (SELECT COUNT(*) FROM session_candidates sc WHERE sc.session_id = s.id) AS candidate_count
     FROM sessions s
     LEFT JOIN jobs j ON j.id = s.job_id
-    WHERE s.user_id = ?
+    WHERE s.user_id IN (${placeholders})
     ORDER BY s.created_at DESC
-  `).all(req.user.id);
+  `).all(...ids);
 
   res.json({ sessions: rows.map(parseSession) });
 });
 
 // ── POST / — create a new session ───────────────────────────────────────────
-router.post('/', (req, res) => {
+router.post('/', requireCapability('sessions.create'), (req, res) => {
   const { name, job_id } = req.body;
 
   const result = db.prepare(`
@@ -97,6 +114,7 @@ router.post('/', (req, res) => {
     VALUES (?, ?, ?)
   `).run(req.user.id, job_id || null, name || null);
 
+  logActivity(req, 'session.create', 'session', result.lastInsertRowid, { name, job_id });
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
@@ -122,10 +140,17 @@ router.get('/:id', (req, res) => {
       j.status           AS job_status
     FROM sessions s
     LEFT JOIN jobs j ON j.id = s.job_id
-    WHERE s.id = ? AND s.user_id = ?
-  `).get(req.params.id, req.user.id);
+    WHERE s.id = ?
+  `).get(req.params.id);
 
   if (!session) return res.status(404).json({ error: 'Session not found.' });
+
+  // Visibility check: owners/team_leads can read any session in their company,
+  // others can only read their own.
+  const allowedIds = visibleUserIds(req);
+  if (!allowedIds.includes(session.user_id)) {
+    return res.status(404).json({ error: 'Session not found.' });
+  }
 
   // Build job sub-object
   const job = session.job_title ? {
@@ -185,8 +210,8 @@ router.get('/:id', (req, res) => {
 });
 
 // ── PUT /:id — update session fields ────────────────────────────────────────
-router.put('/:id', (req, res) => {
-  const existing = ownershipCheck(req.params.id, req.user.id);
+router.put('/:id', requireCapability('sessions.update'), (req, res) => {
+  const existing = ownershipCheck(req.params.id, req.user.id, req);
   if (!existing) return res.status(404).json({ error: 'Session not found.' });
 
   const allowed = ['name', 'job_id', 'current_step', 'enhancement_data', 'enhancement_saved', 'status', 'vi_interview_id'];
@@ -215,8 +240,8 @@ router.put('/:id', (req, res) => {
 });
 
 // ── DELETE /:id — delete session ────────────────────────────────────────────
-router.delete('/:id', (req, res) => {
-  const existing = ownershipCheck(req.params.id, req.user.id);
+router.delete('/:id', requireCapability('sessions.update'), (req, res) => {
+  const existing = ownershipCheck(req.params.id, req.user.id, req);
   if (!existing) return res.status(404).json({ error: 'Session not found.' });
 
   db.prepare('DELETE FROM sessions WHERE id = ?').run(req.params.id);
@@ -225,7 +250,7 @@ router.delete('/:id', (req, res) => {
 
 // ── POST /:id/candidates — add candidates to session ────────────────────────
 router.post('/:id/candidates', (req, res) => {
-  const session = ownershipCheck(req.params.id, req.user.id);
+  const session = ownershipCheck(req.params.id, req.user.id, req);
   if (!session) return res.status(404).json({ error: 'Session not found.' });
 
   const { candidate_ids } = req.body;
@@ -287,7 +312,7 @@ router.post('/:id/candidates', (req, res) => {
 // ── PUT /:id/candidates/:candidateId — update a session_candidate row ───────
 // NOTE: :candidateId is the session_candidates.id PK, not the candidate_id FK
 router.put('/:id/candidates/:candidateId', (req, res) => {
-  const session = ownershipCheck(req.params.id, req.user.id);
+  const session = ownershipCheck(req.params.id, req.user.id, req);
   if (!session) return res.status(404).json({ error: 'Session not found.' });
 
   const scRow = db.prepare(
@@ -330,6 +355,17 @@ router.put('/:id/candidates/:candidateId', (req, res) => {
   if (sets.length > 0) {
     values.push(scRow.id);
     db.prepare(`UPDATE session_candidates SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+
+    // Log only the high-signal state transitions, not every metadata write.
+    const interesting = ['screening_status', 'decision', 'pipeline_status'];
+    const changed = Object.fromEntries(
+      interesting.filter(k => req.body[k] !== undefined).map(k => [k, req.body[k]])
+    );
+    if (Object.keys(changed).length) {
+      logActivity(req, 'session.candidate.update', 'session_candidate', scRow.id, {
+        session_id: Number(req.params.id), ...changed,
+      });
+    }
   }
 
   res.json({ ok: true });
@@ -337,7 +373,7 @@ router.put('/:id/candidates/:candidateId', (req, res) => {
 
 // ── DELETE /:id/candidates/:candidateId — remove session_candidate ───────────
 router.delete('/:id/candidates/:candidateId', (req, res) => {
-  const session = ownershipCheck(req.params.id, req.user.id);
+  const session = ownershipCheck(req.params.id, req.user.id, req);
   if (!session) return res.status(404).json({ error: 'Session not found.' });
 
   const scRow = db.prepare(
@@ -351,7 +387,7 @@ router.delete('/:id/candidates/:candidateId', (req, res) => {
 
 // ── POST /:id/candidates/:candidateId/evaluate — AI resume evaluation ────────
 router.post('/:id/candidates/:candidateId/evaluate', async (req, res) => {
-  const session = ownershipCheck(req.params.id, req.user.id);
+  const session = ownershipCheck(req.params.id, req.user.id, req);
   if (!session) return res.status(404).json({ error: 'Session not found.' });
 
   // :candidateId here is the session_candidates.id PK
