@@ -39,7 +39,12 @@ fs.mkdirSync(TRANSCRIPTS_DIR, { recursive: true });
 const activeCalls = {};
 
 // ── Deepgram client ─────────────────────────────────────────────────────────
-const deepgramClient = createClient(process.env.DEEPGRAM_API_KEY);
+// Only needed for live call transcription. When the key is absent (e.g.
+// UI-only deploys) skip creation — createClient() throws on a missing key,
+// which would otherwise crash the server at startup.
+const deepgramClient = process.env.DEEPGRAM_API_KEY
+  ? createClient(process.env.DEEPGRAM_API_KEY)
+  : null;
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 app.use('/auth',  require('./routes/auth'));

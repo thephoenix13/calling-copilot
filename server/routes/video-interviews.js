@@ -11,7 +11,12 @@ const { sendEmail }       = require('../utils/mailer');
 const { buildInviteEmail } = require('../utils/emailTemplates');
 
 const anthropic      = new Anthropic();
-const deepgramClient = createClient(process.env.DEEPGRAM_API_KEY);
+// Skip Deepgram setup when no key is configured (createClient throws on a
+// missing key, crashing the server at startup). Transcription features that
+// rely on it are inactive until DEEPGRAM_API_KEY is set.
+const deepgramClient = process.env.DEEPGRAM_API_KEY
+  ? createClient(process.env.DEEPGRAM_API_KEY)
+  : null;
 
 const VI_DIR = path.join(__dirname, '..', '..', 'uploads', 'vi');
 fs.mkdirSync(VI_DIR, { recursive: true });
