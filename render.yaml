@@ -1,0 +1,53 @@
+# Render Blueprint — deploys the backend API + static frontend.
+# Both services build from the `production` branch, so day-to-day work
+# on `main` never triggers a deploy. Merge main -> production to ship.
+#
+# Env vars marked `sync: false` are NOT stored in this file or in git —
+# Render prompts for them in the dashboard when you create the blueprint.
+services:
+  # ── Backend: Node web service (always-on, free) ──────────────────────
+  - type: web
+    name: recruiter-call-api
+    runtime: node
+    plan: free
+    branch: production
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true        # Render generates a strong random secret
+      - key: ANTHROPIC_API_KEY
+        sync: false                # paste your Claude key in the dashboard
+      - key: CLIENT_URL
+        sync: false                # set to the frontend URL after first deploy
+      - key: FRONTEND_URL
+        sync: false                # same as CLIENT_URL
+      # Optional email (leave unset to disable outbound mail):
+      # - key: SMTP_HOST
+      #   sync: false
+      # - key: SMTP_PORT
+      #   sync: false
+      # - key: SMTP_USER
+      #   sync: false
+      # - key: SMTP_PASS
+      #   sync: false
+      # NOTE: do NOT set PORT — Render injects it automatically.
+
+  # ── Frontend: static React (Vite) build ─────────────────────────────
+  - type: web
+    name: recruiter-call-web
+    runtime: static
+    branch: production
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_BACKEND_URL
+        sync: false                # set to the backend's onrender.com URL
+    routes:
+      # SPA fallback: serve index.html for client-side routes / refreshes
+      # and candidate deep-links (assessment / POFU / video tokens).
+      - type: rewrite
+        source: /*
+        destination: /index.html
