@@ -22,6 +22,7 @@ import ReportsModule from './components/agentic/ReportsModule';
 import RecruiterQAModule from './components/agentic/RecruiterQAModule';
 import ActivityFeedModule from './components/agentic/ActivityFeedModule';
 import MarketIntelligenceModule from './components/agentic/MarketIntelligenceModule';
+import AskMisModule from './components/agentic/AskMisModule';
 import CandidateFlow from './components/video/CandidateFlow';
 import CandidateResponsePage from './components/CandidateResponsePage';
 import AssessmentsModule from './components/agentic/AssessmentsModule';
@@ -94,7 +95,7 @@ export default function App() {
   // Privileged users that can see the cross-company "Users" panel.
   // Accept legacy 'admin' so old JWTs still work until the user re-logs in.
   const isAdmin = userRole === 'owner' || userRole === 'team_lead' || userRole === 'admin';
-  const [view, setView] = useState('calling-copilot');
+  const [view, setView] = useState('dashboard');
   const [sessionId, setSessionId] = useState(null);
   const [displayName, setDisplayName] = useState('');
   // screeningContext: set when launching a call from Step 4 of a pipeline session
@@ -519,6 +520,7 @@ export default function App() {
   if (view === 'recruiter-qa')     return <AppShell {...shellProps}><RecruiterQAModule authFetch={authFetch} /></AppShell>;
   if (view === 'activity')         return <AppShell {...shellProps}><ActivityFeedModule authFetch={authFetch} /></AppShell>;
   if (view === 'market-intel')     return <AppShell {...shellProps}><MarketIntelligenceModule authFetch={authFetch} userRole={userRole} /></AppShell>;
+  if (view === 'ask-mis')          return <AppShell {...shellProps}><AskMisModule authFetch={authFetch} userRole={userRole} /></AppShell>;
   if (view === 'settings')         return <AppShell {...shellProps}><SettingsModule authFetch={authFetch} userRole={userRole} displayName={displayName} /></AppShell>;
 
   if (view === 'sessions') {

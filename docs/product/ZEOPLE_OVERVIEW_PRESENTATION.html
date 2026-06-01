@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zeople RecruiterOS — Product Overview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap">
+
+<style>
+:root {
+  --brand:           #E8335A;
+  --brand-deep:      #C71F45;
+  --brand-dim:       rgba(232, 51, 90, 0.10);
+  --accent:          #F97316;
+  --accent-hover:    #EA580C;
+  --accent-dim:      rgba(249, 115, 22, 0.12);
+  --accent-soft:     #FFEDDB;
+  --navy:            #1A2B4A;
+  --navy-deep:       #0F1E35;
+  --navy-hover:      #1D3461;
+  --bg:              #F5F7FA;
+  --bg-card:         #FFFFFF;
+  --bg-soft:         #FAFBFD;
+  --border:          #E4E8EE;
+  --border-strong:   #CBD5E1;
+  --text-1:          #0F172A;
+  --text-2:          #475569;
+  --text-3:          #94A3B8;
+  --green:           #16A34A;
+  --green-soft:      #DCFCE7;
+  --red:             #DC2626;
+  --amber:           #F59E0B;
+  --amber-soft:      #FEF3C7;
+}
+
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 400;
+  color: var(--text-1);
+  background: #1a1a1a;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.011em;
+}
+
+/* === SLIDE CANVAS === */
+.deck { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 40px 0; }
+
+.slide {
+  width: 1600px;
+  height: 900px;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+  box-shadow: 0 30px 80px rgba(0,0,0,0.4);
+  page-break-after: always;
+  break-after: page;
+  display: flex;
+  flex-direction: column;
+  padding: 90px 100px;
+}
+.slide:last-child { page-break-after: auto; break-after: auto; }
+
+/* === SLIDE THEMES === */
+.slide.t-light { background: var(--bg); color: var(--text-1); }
+.slide.t-white { background: #FFFFFF; color: var(--text-1); }
+.slide.t-navy { background: var(--navy-deep); color: #F1F5F9; }
+.slide.t-navy::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at top right, rgba(249,115,22,0.10), transparent 50%),
+    radial-gradient(ellipse at bottom left, rgba(232,51,90,0.10), transparent 50%),
+    linear-gradient(135deg, var(--navy) 0%, var(--navy-deep) 100%);
+  z-index: 0;
+}
+.slide.t-navy > * { position: relative; z-index: 1; }
+.slide.t-navy h1, .slide.t-navy h2, .slide.t-navy h3, .slide.t-navy h4 { color: #FFFFFF; }
+.slide.t-navy p, .slide.t-navy li { color: #CBD5E1; }
+.slide.t-navy strong { color: #FFFFFF; }
+
+.slide.t-brand { background: linear-gradient(135deg, var(--brand) 0%, var(--brand-deep) 100%); color: #FFFFFF; }
+.slide.t-brand h1, .slide.t-brand h2, .slide.t-brand h3 { color: #FFFFFF; }
+.slide.t-brand p { color: rgba(255,255,255,0.92); }
+
+.slide.t-orange { background: linear-gradient(135deg, #FB923C 0%, var(--accent) 60%, var(--accent-hover) 100%); color: #FFFFFF; }
+.slide.t-orange h1, .slide.t-orange h2, .slide.t-orange h3 { color: #FFFFFF; }
+.slide.t-orange p { color: rgba(255,255,255,0.92); }
+
+/* === BRAND HEADER (every slide) === */
+.brand-header {
+  position: absolute;
+  top: 44px;
+  left: 100px;
+  right: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 5;
+}
+.brand-header .logo-wrap { display: flex; align-items: center; gap: 14px; }
+.brand-header .logo-wrap img { width: 38px; height: 38px; object-fit: contain; }
+.brand-header .wordmark {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-1);
+}
+.brand-header .wordmark .accent { color: var(--accent); }
+.slide.t-navy .brand-header .wordmark { color: #FFFFFF; }
+.slide.t-brand .brand-header .wordmark,
+.slide.t-orange .brand-header .wordmark { color: #FFFFFF; }
+.slide.t-brand .brand-header .wordmark .accent,
+.slide.t-orange .brand-header .wordmark .accent { color: #FFFFFF; opacity: 0.85; }
+
+.brand-header .section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.slide.t-navy .brand-header .section-label { color: #94A3B8; }
+.slide.t-brand .brand-header .section-label,
+.slide.t-orange .brand-header .section-label { color: rgba(255,255,255,0.80); }
+
+/* === SLIDE FOOTER === */
+.slide-footer {
+  position: absolute;
+  bottom: 38px;
+  left: 100px;
+  right: 100px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-3);
+  z-index: 5;
+}
+.slide.t-navy .slide-footer { color: rgba(255,255,255,0.32); }
+.slide.t-brand .slide-footer,
+.slide.t-orange .slide-footer { color: rgba(255,255,255,0.55); }
+
+/* === SLIDE CONTENT === */
+.content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding-top: 60px;
+  padding-bottom: 30px;
+}
+
+/* === TYPOGRAPHY === */
+h1, h2, h3, h4, h5 {
+  font-family: 'Inter', sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.028em;
+  margin: 0 0 24px;
+  line-height: 1.05;
+}
+h1 { font-size: 96px; }
+h2 { font-size: 64px; }
+h3 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+h4 { font-size: 20px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.3; margin-bottom: 12px; }
+p  { font-size: 22px; line-height: 1.55; color: var(--text-2); margin: 0 0 16px; font-weight: 400; }
+p.lead { font-size: 26px; line-height: 1.5; max-width: 1100px; color: var(--text-2); }
+ul, ol { margin: 0 0 16px; padding-left: 24px; }
+li { font-size: 19px; line-height: 1.55; margin-bottom: 10px; color: var(--text-1); }
+.slide.t-navy li { color: #E2E8F0; }
+strong { font-weight: 700; color: var(--text-1); }
+.slide.t-navy strong { color: #FFFFFF; }
+
+/* === EYEBROW === */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 8px 14px;
+  border: 1.5px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-dim);
+  margin-bottom: 28px;
+  width: fit-content;
+}
+.eyebrow.eyebrow-brand { color: var(--brand); border-color: var(--brand); background: var(--brand-dim); }
+.slide.t-navy .eyebrow { color: #FFB47A; border-color: rgba(249,115,22,0.5); background: rgba(249,115,22,0.12); }
+.slide.t-navy .eyebrow.eyebrow-brand { color: #FF8FAA; border-color: rgba(232,51,90,0.5); background: rgba(232,51,90,0.12); }
+.slide.t-brand .eyebrow, .slide.t-orange .eyebrow { color: #FFFFFF; border-color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.15); }
+
+.accent { color: var(--accent); }
+.brand-c { color: var(--brand); }
+.slide.t-navy .brand-c { color: #FF8FAA; }
+
+/* === TITLE SLIDE === */
+.title-slide { padding: 0; align-items: stretch; justify-content: center; }
+.title-slide .title-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 140px;
+  height: 100%;
+}
+.title-slide .title-logo { width: 100px; height: 100px; margin-bottom: 48px; }
+.title-slide .product-name {
+  font-size: 128px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  margin-bottom: 24px;
+  color: #FFFFFF;
+}
+.title-slide .product-name .accent { color: var(--accent); }
+.title-slide .tagline {
+  font-size: 36px;
+  font-weight: 500;
+  color: var(--accent);
+  margin-bottom: 28px;
+  letter-spacing: -0.01em;
+}
+.title-slide .subtagline {
+  font-size: 22px;
+  color: #94A3B8;
+  max-width: 800px;
+  line-height: 1.5;
+  font-weight: 400;
+}
+.title-slide .title-decoration {
+  position: absolute;
+  bottom: -200px;
+  right: -200px;
+  width: 700px;
+  height: 700px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(232,51,90,0.18) 0%, transparent 70%);
+  z-index: 0;
+}
+
+/* === BIG STAT === */
+.big-stat-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+}
+.big-stat {
+  font-size: 280px;
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.06em;
+  color: #FFFFFF;
+  margin: 0 0 24px;
+}
+.big-stat .unit { font-size: 0.45em; font-weight: 700; vertical-align: top; margin-left: 0.05em; }
+.stat-caption {
+  font-size: 42px;
+  font-weight: 600;
+  line-height: 1.2;
+  max-width: 1100px;
+  margin-bottom: 24px;
+  color: #FFFFFF;
+}
+.stat-sub { font-size: 22px; max-width: 900px; color: rgba(255,255,255,0.85); }
+
+/* === CARDS === */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 32px;
+  box-shadow: 0 1px 2px rgba(15,30,53,0.04), 0 4px 16px rgba(15,30,53,0.04);
+}
+.card.card-bordered { border-width: 2px; }
+.card.card-pop {
+  box-shadow: 0 4px 8px rgba(15,30,53,0.06), 0 12px 32px rgba(15,30,53,0.08);
+}
+.card-dark {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 18px;
+  padding: 32px;
+  backdrop-filter: blur(8px);
+}
+
+.card .icon, .card-dark .icon {
+  width: 56px; height: 56px; border-radius: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: 800;
+  background: var(--accent-dim); color: var(--accent);
+  margin-bottom: 20px;
+}
+.card .icon.icon-brand { background: var(--brand-dim); color: var(--brand); }
+.card-dark .icon { background: rgba(249,115,22,0.16); color: #FFB47A; }
+.card-dark .icon.icon-brand { background: rgba(232,51,90,0.16); color: #FF8FAA; }
+
+.card h4 { color: var(--text-1); margin-bottom: 10px; font-size: 22px; }
+.card p { font-size: 17px; line-height: 1.5; margin: 0; }
+.card ul { padding-left: 20px; margin: 0; }
+.card li { font-size: 17px; line-height: 1.5; margin-bottom: 8px; }
+.card-dark h4 { color: #FFFFFF; }
+.card-dark p, .card-dark li { color: #CBD5E1; font-size: 17px; line-height: 1.55; }
+
+.card-accent-top { border-top: 5px solid var(--accent); }
+.card-brand-top  { border-top: 5px solid var(--brand); }
+.card-green-top  { border-top: 5px solid var(--green); }
+
+/* === GRID === */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; }
+
+/* === FUNNEL === */
+.funnel {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+  margin: 40px 0;
+}
+.funnel-step {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  padding: 28px 20px;
+  text-align: center;
+  position: relative;
+}
+.funnel-step .label {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #94A3B8;
+  margin-bottom: 12px;
+}
+.funnel-step .step-name {
+  font-size: 26px;
+  font-weight: 700;
+  color: #FFFFFF;
+  line-height: 1.2;
+}
+.funnel-step .step-sub {
+  font-size: 14px;
+  color: #94A3B8;
+  margin-top: 8px;
+}
+.funnel-step.paid {
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-deep) 100%);
+  border-color: var(--brand);
+  box-shadow: 0 20px 40px rgba(232,51,90,0.30);
+  transform: scale(1.06);
+}
+.funnel-step.paid .label { color: rgba(255,255,255,0.9); }
+.funnel-step.paid .step-name { color: #FFFFFF; }
+.funnel-step.paid .step-sub { color: rgba(255,255,255,0.85); }
+
+/* === PILL === */
+.pill {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.pill-accent { background: var(--accent-dim); color: var(--accent); }
+.pill-brand  { background: var(--brand-dim); color: var(--brand); }
+.pill-green  { background: var(--green-soft); color: var(--green); }
+.pill-amber  { background: var(--amber-soft); color: #B45309; }
+.pill-red    { background: #FEE2E2; color: var(--red); }
+.pill-navy   { background: #E2E8F0; color: var(--navy); }
+
+/* === TABLE === */
+.table-wrap { background: var(--bg-card); border-radius: 18px; overflow: hidden; box-shadow: 0 1px 2px rgba(15,30,53,0.04), 0 4px 16px rgba(15,30,53,0.05); border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 17px; }
+thead th {
+  background: var(--navy);
+  color: #FFFFFF;
+  font-weight: 600;
+  text-align: left;
+  padding: 18px 22px;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+tbody td {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  font-size: 17px;
+  color: var(--text-1);
+  line-height: 1.45;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--bg-soft); }
+
+/* === BOOKEND === */
+.bookend {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 40px;
+  align-items: center;
+  margin-top: 50px;
+}
+.bookend-box {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 24px;
+  padding: 50px 40px;
+  text-align: center;
+  backdrop-filter: blur(8px);
+}
+.bookend-box.left { border-top: 5px solid var(--brand); }
+.bookend-box.right { border-top: 5px solid var(--accent); }
+.bookend-box .bookend-tag {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+.bookend-box.left .bookend-tag { color: #FF8FAA; }
+.bookend-box.right .bookend-tag { color: #FFB47A; }
+.bookend-box h3 { color: #FFFFFF; font-size: 36px; margin-bottom: 14px; }
+.bookend-box .bookend-line { font-size: 18px; color: #FFFFFF; font-weight: 500; margin-bottom: 16px; }
+.bookend-box .bookend-sub { font-size: 15px; color: #94A3B8; line-height: 1.5; }
+
+.bookend-arrow {
+  font-size: 56px;
+  font-weight: 300;
+  color: var(--accent);
+  line-height: 1;
+}
+
+/* === TIMELINE === */
+.timeline {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  position: relative;
+  margin: 50px 0 30px;
+  padding-top: 60px;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  top: 100px;
+  left: 9%;
+  right: 9%;
+  height: 4px;
+  background: linear-gradient(to right, rgba(249,115,22,0.7), rgba(232,51,90,0.9), rgba(249,115,22,0.7));
+  border-radius: 2px;
+}
+.tl-step { text-align: center; padding-top: 50px; position: relative; }
+.tl-step::before {
+  content: '';
+  position: absolute;
+  top: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--navy-deep);
+  border: 4px solid #94A3B8;
+  z-index: 2;
+}
+.tl-step.risk::before {
+  background: var(--brand);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 10px rgba(232,51,90,0.18);
+}
+.tl-step.start::before { background: #FFFFFF; border-color: #FFFFFF; }
+.tl-step.end::before {
+  background: linear-gradient(135deg, var(--accent), var(--brand));
+  border-color: var(--accent);
+  box-shadow: 0 0 0 10px rgba(249,115,22,0.20);
+}
+.tl-step .step-title { font-size: 20px; font-weight: 700; color: #FFFFFF; margin-bottom: 6px; }
+.tl-step .step-desc { font-size: 14px; color: #94A3B8; line-height: 1.4; }
+
+/* === LAYER STACK === */
+.layer-stack { display: flex; flex-direction: column; gap: 12px; }
+.layer {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 18px 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 18px;
+}
+.layer .layer-name { font-weight: 700; color: var(--text-1); }
+.layer .layer-desc { color: var(--text-2); font-size: 16px; max-width: 850px; text-align: right; }
+.layer.pillar { border-left-width: 7px; padding: 22px 26px; box-shadow: 0 4px 16px rgba(15,30,53,0.06); }
+.layer.pillar-brand {
+  border-left-color: var(--brand);
+  background: linear-gradient(90deg, var(--brand-dim) 0%, var(--bg-card) 35%);
+}
+.layer.pillar-accent {
+  border-left-color: var(--accent);
+  background: linear-gradient(90deg, var(--accent-dim) 0%, var(--bg-card) 35%);
+}
+.layer.pillar .layer-name { font-size: 21px; }
+.layer.pillar .layer-tag {
+  font-size: 10px; letter-spacing: 0.20em; text-transform: uppercase; font-weight: 700;
+  margin-right: 12px; padding: 4px 10px; border-radius: 999px;
+}
+.layer.pillar-brand .layer-tag { background: var(--brand); color: #FFFFFF; }
+.layer.pillar-accent .layer-tag { background: var(--accent); color: #FFFFFF; }
+
+/* === NORTH STAR === */
+.north-star-card {
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-deep) 100%);
+  border-radius: 24px;
+  padding: 40px 50px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(232,51,90,0.30);
+  margin-bottom: 32px;
+}
+.north-star-card .ns-label {
+  font-size: 13px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  margin-bottom: 14px;
+}
+.north-star-card .ns-metric {
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: #FFFFFF;
+  line-height: 1.05;
+  margin-bottom: 10px;
+}
+.north-star-card .ns-sub {
+  font-size: 18px;
+  color: rgba(255,255,255,0.85);
+}
+
+.kpi-tree {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 16px;
+  padding: 28px 32px;
+  font-family: 'Inter', sans-serif;
+}
+.kpi-line { font-size: 16px; line-height: 2; color: #CBD5E1; font-family: 'Courier New', monospace; }
+.kpi-line.branch { color: #FFFFFF; font-weight: 600; }
+.kpi-line .accent { color: var(--accent); font-weight: 700; }
+.kpi-line .muted { color: #64748B; font-size: 14px; }
+
+/* === BEFORE/AFTER === */
+.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: stretch; margin-top: 30px; }
+.compare-side { padding: 36px; border-radius: 18px; min-height: 360px; }
+.compare-side.before { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.10); }
+.compare-side.after { background: linear-gradient(135deg, rgba(249,115,22,0.18) 0%, rgba(232,51,90,0.12) 100%); border: 1px solid rgba(249,115,22,0.30); }
+.compare-side h4 { font-size: 22px; margin-bottom: 18px; }
+.compare-side.before h4 { color: #94A3B8; }
+.compare-side.after h4 { color: #FFB47A; }
+.compare-side ul { padding-left: 22px; }
+.compare-side li { font-size: 18px; line-height: 1.5; margin-bottom: 12px; color: #E2E8F0; }
+.compare-side.after li strong { color: #FFFFFF; }
+
+/* === STATEMENT CALLOUT === */
+.statement {
+  background: rgba(255,255,255,0.06);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 12px 12px 0;
+  padding: 24px 32px;
+  font-size: 22px;
+  font-weight: 500;
+  color: #FFFFFF;
+  line-height: 1.4;
+  margin-top: auto;
+}
+.statement .accent { color: var(--accent); font-weight: 700; }
+.statement .big { font-size: 32px; font-weight: 700; }
+
+/* === CLOSING === */
+.closing-slide { align-items: center; justify-content: center; }
+.closing-content { text-align: center; max-width: 1100px; padding: 0 60px; }
+.closing-logo { width: 110px; height: 110px; margin-bottom: 40px; }
+.closing-statement {
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #FFFFFF;
+  letter-spacing: -0.025em;
+  margin-bottom: 36px;
+}
+.closing-statement .accent { color: var(--accent); }
+.closing-statement .brand-c { color: #FF8FAA; }
+.closing-sub {
+  font-size: 22px;
+  color: #94A3B8;
+  letter-spacing: 0.01em;
+}
+
+/* === CHECK MARKS === */
+.check-cell { color: var(--green); font-weight: 800; font-size: 22px; text-align: center; }
+.cross-cell { color: var(--text-3); font-size: 22px; text-align: center; }
+.partial-cell { color: var(--amber); font-weight: 700; font-size: 22px; text-align: center; }
+
+/* === PRINT RULES === */
+@page {
+  size: 1600px 900px;
+  margin: 0;
+}
+@media print {
+  html, body { background: #FFFFFF; }
+  .deck { padding: 0; gap: 0; }
+  .slide { box-shadow: none; margin: 0; }
+}
+
+/* === SCREEN-ONLY SCALING (for comfortable viewing) === */
+@media screen and (max-width: 1700px) {
+  .deck { padding: 20px 0; gap: 16px; }
+  .slide { transform: scale(0.6); transform-origin: top center; margin-bottom: -360px; }
+}
+@media screen and (max-width: 1100px) {
+  .slide { transform: scale(0.45); margin-bottom: -495px; }
+}
+@media screen and (max-width: 700px) {
+  .slide { transform: scale(0.3); margin-bottom: -630px; }
+}
+</style>
+</head>
+<body>
+<div class="deck">
+
+<!-- ====================================================================== -->
+<!-- SLIDE 1 — TITLE                                                         -->
+<!-- ====================================================================== -->
+<section class="slide t-navy title-slide">
+  <div class="title-decoration"></div>
+  <div class="title-content">
+    <img src="zeople-logo.png" alt="Zeople" class="title-logo">
+    <div class="product-name">Zeople <span class="accent">RecruiterOS</span></div>
+    <div class="tagline">The AI Co-Pilot for Recruiting Agencies</div>
+    <div class="subtagline">Protecting agency revenue from the first recruiter call to the candidate's first day on the job.</div>
+  </div>
+  <div class="slide-footer">
+    <span>Product Overview · 2026</span>
+    <span>01</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 2 — BIG STAT                                                      -->
+<!-- ====================================================================== -->
+<section class="slide t-brand">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">The Problem</div>
+  </div>
+
+  <div class="content big-stat-block">
+    <div class="big-stat">30–50<span class="unit">%</span></div>
+    <div class="stat-caption">of accepted offers never become a Day-1 join.</div>
+    <p class="stat-sub">Counter-offers. BGV failures. Multiple-offer juggling. Notice-period games. Ghosting. Every dropped offer is paid-for-zero work for the agency that earned it.</p>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>02</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 3 — AGENCY REVENUE EQUATION                                       -->
+<!-- ====================================================================== -->
+<section class="slide t-navy">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">The Revenue Equation</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow">How agencies actually get paid</div>
+    <h2>Agencies are paid on <span class="accent">joins</span>.<br>Not on calls. Not on offers.</h2>
+    <p class="lead">Every step before Day-1 is unpaid work-in-progress. The agency P&amp;L flows from one number.</p>
+
+    <div class="funnel">
+      <div class="funnel-step">
+        <div class="label">Step 1</div>
+        <div class="step-name">Calls</div>
+        <div class="step-sub">Sourcing &amp; screening</div>
+      </div>
+      <div class="funnel-step">
+        <div class="label">Step 2</div>
+        <div class="step-name">Submission</div>
+        <div class="step-sub">Resume sent to client</div>
+      </div>
+      <div class="funnel-step">
+        <div class="label">Step 3</div>
+        <div class="step-name">Interview</div>
+        <div class="step-sub">Client evaluation</div>
+      </div>
+      <div class="funnel-step">
+        <div class="label">Step 4</div>
+        <div class="step-name">Offer</div>
+        <div class="step-sub">Accepted by candidate</div>
+      </div>
+      <div class="funnel-step paid">
+        <div class="label">Paid Step</div>
+        <div class="step-name">Join</div>
+        <div class="step-sub">The only paid step</div>
+      </div>
+    </div>
+
+    <p style="color: #94A3B8; font-size: 18px; margin-top: 30px;">Modern ATSes optimize for the steps to the left. Zeople optimizes for the only step the agency is paid for.</p>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>03</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 4 — TWO BREAKDOWNS                                                -->
+<!-- ====================================================================== -->
+<section class="slide t-light">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">Two Breakdowns</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow eyebrow-brand">Where agency revenue actually leaks</div>
+    <h2>The funnel breaks on <span class="brand-c">both ends</span> —<br>and no one has fixed either.</h2>
+
+    <div class="grid-2" style="margin-top: 36px;">
+      <div class="card card-brand-top card-pop">
+        <span class="pill pill-brand">Top of funnel</span>
+        <h3 style="margin-top: 16px;">Recruiter calls don't scale.</h3>
+        <ul>
+          <li>Every agency has <strong>1–2 strong recruiters and 8–12 average ones.</strong></li>
+          <li>Delivery heads listen to <strong>5–10 calls a week</strong> out of thousands. Coaching is anecdotal.</li>
+          <li>AI-generated resumes have <strong>broken pre-call signals.</strong> The call is now the only trustworthy signal.</li>
+          <li>New-recruiter ramp-up takes <strong>60–90 days</strong> with no feedback loop.</li>
+        </ul>
+      </div>
+
+      <div class="card card-accent-top card-pop">
+        <span class="pill pill-accent">Bottom of funnel</span>
+        <h3 style="margin-top: 16px;">Accepted offers silently die.</h3>
+        <ul>
+          <li><strong>Counter-offers</strong> from current employers — 30–40% of accepts.</li>
+          <li><strong>BGV failures</strong> — discrepancies in dates, education, criminal checks.</li>
+          <li><strong>Multiple-offer juggling</strong> — candidates pick one closer to joining.</li>
+          <li><strong>Notice-period erosion</strong> in 60–90 day markets.</li>
+          <li><strong>Post-acceptance ghosting</strong> — silent right up to Day-1.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>04</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 5 — WHAT EXISTING TOOLS MISS                                      -->
+<!-- ====================================================================== -->
+<section class="slide t-light">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">The Tool Gap</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow eyebrow-brand">Why nobody fixes this</div>
+    <h2>Existing tools were <span class="brand-c">never built</span><br>for agency economics.</h2>
+
+    <div class="table-wrap" style="margin-top: 30px;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 22%;">Category</th>
+            <th style="width: 26%;">Examples</th>
+            <th style="width: 26%;">What they do well</th>
+            <th>What they miss</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Modern ATS</strong></td>
+            <td>Greenhouse, Lever, Ashby</td>
+            <td>Req management for in-house teams</td>
+            <td>Not built for agencies; no call intelligence; no offer protection</td>
+          </tr>
+          <tr>
+            <td><strong>Legacy agency ATS</strong></td>
+            <td>Bullhorn, Zoho Recruit, JobDiva</td>
+            <td>Fee/submission data model</td>
+            <td>No AI-native evaluation; no offer protection; dated UX</td>
+          </tr>
+          <tr>
+            <td><strong>Call intelligence</strong></td>
+            <td>Metaview, Sybill, Gong</td>
+            <td>Transcription, summaries</td>
+            <td>Sales-origin; standalone; no candidate eval; no workflow</td>
+          </tr>
+          <tr>
+            <td><strong>Engagement / drip</strong></td>
+            <td>Sense, GoodTime, generic CRM</td>
+            <td>Email automation</td>
+            <td>Generic; no risk scoring; no post-offer state model</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top: 28px; font-size: 20px; color: var(--text-2); text-align: center;">
+      <strong style="color: var(--text-1);">No product packages call intelligence and post-offer protection</strong> inside the agency workflow.
+    </p>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>05</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 6 — WHY NOW                                                       -->
+<!-- ====================================================================== -->
+<section class="slide t-navy">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">Why Now</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow">Two AI breakthroughs in 18 months</div>
+    <h2>For the first time, both breakdowns are<br><span class="accent">solvable in production</span>.</h2>
+
+    <div class="grid-2" style="margin-top: 50px;">
+      <div class="card-dark">
+        <div class="icon">1</div>
+        <h3 style="font-size: 28px;">Real-time call evaluation is production-grade.</h3>
+        <p>Modern LLMs can transcribe a call, surface in-call guidance, and produce a structured post-call evaluation — at a cost low enough to run on <strong>every single call</strong>, not just a sampled few.</p>
+      </div>
+      <div class="card-dark">
+        <div class="icon">2</div>
+        <h3 style="font-size: 28px;">Behavioral signal from candidate comms is reliable.</h3>
+        <p>AI can read a candidate's response (or non-response) to a post-offer check-in, infer engagement or hesitation, and trigger interventions <strong>early enough to save the placement.</strong></p>
+      </div>
+    </div>
+
+    <div class="statement">
+      Neither was true 18 months ago. Both are true now. <span class="accent">Zeople is the first product</span> to package them into a single workflow for recruiting agencies.
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>06</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 7 — THE TWO PILLARS                                               -->
+<!-- ====================================================================== -->
+<section class="slide t-navy">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">The Solution</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow">The Zeople thesis</div>
+    <h2 style="font-size: 56px;">Two pillars wrap around the<br>agency revenue equation.</h2>
+
+    <div class="bookend">
+      <div class="bookend-box left">
+        <div class="bookend-tag">Pillar 1</div>
+        <h3>Calling CoPilot</h3>
+        <div class="bookend-line">Make more offers happen.</div>
+        <div class="bookend-sub">Live AI on every call. Coaching at scale. Every candidate evaluated.</div>
+      </div>
+      <div class="bookend-arrow">→</div>
+      <div class="bookend-box right">
+        <div class="bookend-tag">Pillar 2</div>
+        <h3>Post-Offer Follow-Up</h3>
+        <div class="bookend-line">Make sure offers convert to joins.</div>
+        <div class="bookend-sub">Active engagement. Drop-risk scoring. Intervention before the loss.</div>
+      </div>
+    </div>
+
+    <div class="statement" style="margin-top: 40px; text-align: center;">
+      Front end: <strong>stronger candidates, better offers.</strong> &nbsp;·&nbsp; Back end: <strong>offers that actually become paid placements.</strong>
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>07</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 8 — COPILOT CAPABILITIES                                          -->
+<!-- ====================================================================== -->
+<section class="slide t-light">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">Pillar 1 · Calling CoPilot</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow eyebrow-brand">Calling CoPilot</div>
+    <h2>Live AI on every call —<br>from dial-out to wrap-up.</h2>
+
+    <div class="grid-4" style="margin-top: 36px;">
+      <div class="card">
+        <div class="icon icon-brand">A</div>
+        <h4>Live Transcription</h4>
+        <p>Dual-track audio via Deepgram. Recruiter and candidate on separate streams. Real-time display in the browser.</p>
+      </div>
+      <div class="card">
+        <div class="icon icon-brand">B</div>
+        <h4>In-Call Guidance</h4>
+        <p>Claude monitors the transcript live and surfaces context-aware nudges — what to probe, red flags, skills not yet covered.</p>
+      </div>
+      <div class="card">
+        <div class="icon icon-brand">C</div>
+        <h4>Post-Call Evaluation</h4>
+        <p>Two structured reports per call — recruiter QA scorecard and candidate evaluation — generated automatically.</p>
+      </div>
+      <div class="card">
+        <div class="icon icon-brand">D</div>
+        <h4>Auto-Demo Mode</h4>
+        <p>Fully simulated recruiter-candidate conversation with AI on both sides — for training, demos, and onboarding.</p>
+      </div>
+    </div>
+
+    <p style="text-align: center; margin-top: 36px; font-size: 22px; color: var(--text-2);">
+      Not optional. Not sampled. <strong style="color: var(--text-1);">Every call gets the full treatment.</strong>
+    </p>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>08</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 9 — COPILOT: TWO REPORTS                                          -->
+<!-- ====================================================================== -->
+<section class="slide t-light">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">Pillar 1 · Two Reports Per Call</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow eyebrow-brand">Every call · Two artifacts</div>
+    <h2>Recruiter <span class="brand-c">and</span> candidate, scored together.</h2>
+
+    <div class="grid-2" style="margin-top: 32px;">
+      <div class="card card-brand-top card-pop">
+        <span class="pill pill-brand">Recruiter-facing</span>
+        <h3 style="margin-top: 16px;">Per-Call QA Report</h3>
+        <p style="font-size: 17px; margin-bottom: 14px;">Scores the recruiter across five dimensions:</p>
+        <ul>
+          <li><strong>Coverage</strong> — was every required area probed?</li>
+          <li><strong>Structure</strong> — was the call well-organized?</li>
+          <li><strong>Tone &amp; empathy</strong> — did the candidate feel respected?</li>
+          <li><strong>Probing depth</strong> — surface answers vs. real signal?</li>
+          <li><strong>Closing</strong> — next steps clearly set?</li>
+        </ul>
+        <p style="font-size: 15px; color: var(--text-3); margin-top: 14px;">Color-coded score · evidence-grounded · weakest dimension flagged · targeted coaching nudges.</p>
+      </div>
+
+      <div class="card card-accent-top card-pop">
+        <span class="pill pill-accent">Candidate-facing</span>
+        <h3 style="margin-top: 16px;">Candidate Evaluation Report</h3>
+        <p style="font-size: 17px; margin-bottom: 14px;">Structured assessment of fit based on what was actually said:</p>
+        <ul>
+          <li><strong>Skill match</strong> against required and preferred skills</li>
+          <li><strong>Experience alignment</strong> — depth, relevance, recency</li>
+          <li><strong>Motivation signals</strong> — interest vs. fishing</li>
+          <li><strong>Red flags</strong> — inconsistencies, hesitation</li>
+          <li><strong>Submission verdict</strong> — proceed / hold / reject</li>
+        </ul>
+        <p style="font-size: 15px; color: var(--text-3); margin-top: 14px;">Powers the pipeline decision · submission notes write themselves.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>09</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 10 — COPILOT: COACHING LOOP                                       -->
+<!-- ====================================================================== -->
+<section class="slide t-navy">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">Pillar 1 · Coaching at Scale</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow">Recruiter QA</div>
+    <h2>Coaching at scale,<br>for the first time.</h2>
+
+    <div class="compare-grid">
+      <div class="compare-side before">
+        <h4>BEFORE ZEOPLE</h4>
+        <ul>
+          <li>Delivery head listens to <strong>5–10 calls a week</strong> out of thousands.</li>
+          <li>Coaching is <strong>anecdotal</strong> — based on whoever happened to be overheard.</li>
+          <li>New recruiter ramp-up: <strong>60–90 days</strong>.</li>
+          <li>No way to spot which recruiters need help on which dimension.</li>
+        </ul>
+      </div>
+      <div class="compare-side after">
+        <h4>WITH ZEOPLE</h4>
+        <ul>
+          <li><strong>Every call scored</strong> on the same five dimensions.</li>
+          <li>Team-wide view: who's strong where, who's weak where.</li>
+          <li>KPI strip: avg QA score, "needs coaching" %, most common weak dimension.</li>
+          <li>Drill into any call — scorecard, transcript, coaching nudges.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="statement" style="margin-top: 30px;">
+      A delivery head can effectively oversee <span class="accent big">30 recruiters</span> with the same effort previously spent on <strong>8</strong>.
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>10</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 11 — POFU CAPABILITIES                                            -->
+<!-- ====================================================================== -->
+<section class="slide t-light">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">Pillar 2 · Post-Offer Follow-Up</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow">Post-Offer Follow-Up</div>
+    <h2>The risk window<br><span class="accent">no ATS protects</span>.</h2>
+    <p class="lead" style="max-width: 1100px;">Most ATSes treat offer-accept as the finish line. It's actually the risk peak. POFU activates the moment a candidate accepts and stays active until Day-1.</p>
+
+    <div class="grid-4" style="margin-top: 30px;">
+      <div class="card">
+        <div class="icon">A</div>
+        <h4>Automated Check-ins</h4>
+        <p>Personalized emails at the right intervals — T+3 days, T+1 week, mid-notice, T-7 before joining.</p>
+      </div>
+      <div class="card">
+        <div class="icon">B</div>
+        <h4>State Tracking</h4>
+        <p>Captures progression: <strong>Resigned → BGV → Joining date → Joined.</strong> Missing milestones are signals.</p>
+      </div>
+      <div class="card">
+        <div class="icon">C</div>
+        <h4>AI Risk Scoring</h4>
+        <p>Continuously updated low/medium/high risk. Inferred from response latency, sentiment, delays.</p>
+      </div>
+      <div class="card">
+        <div class="icon">D</div>
+        <h4>Intervention Nudges</h4>
+        <p>When risk crosses a threshold, the system surfaces the candidate with a recommended action.</p>
+      </div>
+    </div>
+
+    <p style="text-align: center; margin-top: 32px; font-size: 18px; color: var(--text-3);">Background engine runs every 6 hours via node-cron · fully autonomous in steady state.</p>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>11</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 12 — POFU: RISK WINDOW TIMELINE                                   -->
+<!-- ====================================================================== -->
+<section class="slide t-navy">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">Pillar 2 · The Risk Window</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow">The post-offer journey</div>
+    <h2>From accept to Day-1 —<br>every milestone is a <span class="brand-c">risk peak</span>.</h2>
+
+    <div class="timeline">
+      <div class="tl-step start">
+        <div class="step-title">Offer Accepted</div>
+        <div class="step-desc">T+0</div>
+      </div>
+      <div class="tl-step risk">
+        <div class="step-title">Resigned</div>
+        <div class="step-desc">Counter-offer peak</div>
+      </div>
+      <div class="tl-step risk">
+        <div class="step-title">BGV Verified</div>
+        <div class="step-desc">Verification failures</div>
+      </div>
+      <div class="tl-step risk">
+        <div class="step-title">Joining Confirmed</div>
+        <div class="step-desc">Multi-offer juggling</div>
+      </div>
+      <div class="tl-step end">
+        <div class="step-title">Day-1 Join</div>
+        <div class="step-desc">Paid placement</div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top: 50px;">
+      <div class="card-dark">
+        <h4 style="color: #FFFFFF;">What POFU moves</h4>
+        <ul>
+          <li><strong>Offer-to-join conversion</strong> — target: <span style="color: var(--accent); font-weight: 700;">+10 percentage points</span></li>
+          <li><strong>Time-to-detect risk</strong> — flagged at week 2, not at Day-1</li>
+          <li><strong>Recruiter follow-up time</strong> — automated touchpoints</li>
+          <li><strong>Revenue per offer</strong> — same offers, more paid placements</li>
+        </ul>
+      </div>
+      <div class="card-dark">
+        <h4 style="color: #FFFFFF;">Why it's defensible</h4>
+        <ul>
+          <li>Proprietary outcome data sharpens the risk model over time.</li>
+          <li>Workflow-aware — understands resign / BGV / joining states.</li>
+          <li>The only module that directly affects <em>what agencies are paid for</em>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>12</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 13 — WHY BOTH WIN TOGETHER                                        -->
+<!-- ====================================================================== -->
+<section class="slide t-orange">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">The Combination</div>
+  </div>
+
+  <div class="content">
+    <h2 style="color: #FFFFFF; font-size: 60px;">CoPilot and POFU are the<br><span style="background: rgba(255,255,255,0.95); color: var(--navy-deep); padding: 2px 16px; border-radius: 10px; display: inline-block;">bookends</span> of agency revenue.</h2>
+
+    <div style="background: rgba(255,255,255,0.10); backdrop-filter: blur(10px); border-radius: 20px; padding: 8px; margin-top: 40px; border: 1px solid rgba(255,255,255,0.25);">
+      <table style="font-size: 19px;">
+        <thead>
+          <tr><th style="background: rgba(0,0,0,0.20); color: #FFFFFF;">Stage of revenue cycle</th><th style="background: rgba(0,0,0,0.20); color: #FFFFFF;">Module</th><th style="background: rgba(0,0,0,0.20); color: #FFFFFF;">What it protects</th></tr>
+        </thead>
+        <tbody style="color: #FFFFFF;">
+          <tr style="background: rgba(255,255,255,0.06);"><td style="color: #FFFFFF;">Recruiter call → submission</td><td style="color: #FFFFFF;"><strong>CoPilot</strong></td><td style="color: #FFFFFF;">Submission quality, candidate fit signal</td></tr>
+          <tr style="background: rgba(255,255,255,0.12);"><td style="color: #FFFFFF;">Submission → offer</td><td style="color: #FFFFFF;"><strong>Workflow + CoPilot</strong></td><td style="color: #FFFFFF;">Decision quality</td></tr>
+          <tr style="background: rgba(255,255,255,0.06);"><td style="color: #FFFFFF;">Offer → Day-1 join</td><td style="color: #FFFFFF;"><strong>POFU</strong></td><td style="color: #FFFFFF;">The placement fee itself</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top: 40px; color: #FFFFFF; font-size: 22px; max-width: 1200px;">
+      In isolation, each pillar has competitors. <strong style="color: #FFFFFF;">Together — packaged for the agency workflow on shared infrastructure — nothing else exists.</strong>
+    </p>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>13</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 14 — THE SUPPORTING SYSTEM                                        -->
+<!-- ====================================================================== -->
+<section class="slide t-light">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">The Supporting System</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow">Around the two pillars</div>
+    <h2>A full agency workflow —<br>built so the pillars actually work.</h2>
+
+    <div class="layer-stack" style="margin-top: 26px;">
+      <div class="layer pillar pillar-brand">
+        <div style="display: flex; align-items: center;">
+          <span class="layer-tag">Pillar 1</span>
+          <span class="layer-name">Calling CoPilot</span>
+        </div>
+        <span class="layer-desc">Live transcription · in-call guidance · post-call evaluation · Recruiter QA</span>
+      </div>
+      <div class="layer">
+        <span class="layer-name">Workflow Spine — Pipeline Sessions</span>
+        <span class="layer-desc">7-step pipeline: Select JD → Enhance → Source → Screen → Assess → Decide → Track</span>
+      </div>
+      <div class="layer">
+        <span class="layer-name">Funnel Modules</span>
+        <span class="layer-desc">Jobs · JD Enhancer · Candidate Database · Hiring Manager Portal</span>
+      </div>
+      <div class="layer">
+        <span class="layer-name">Filter Modules</span>
+        <span class="layer-desc">Video Interviews · MCQ Assessments · Coding Assessments — AI-evaluated</span>
+      </div>
+      <div class="layer">
+        <span class="layer-name">Measurement</span>
+        <span class="layer-desc">Reports &amp; Analytics — 8 tabs · KPI strip · drill-down to candidate</span>
+      </div>
+      <div class="layer">
+        <span class="layer-name">Intelligence</span>
+        <span class="layer-desc">Market Intelligence — 4-stage Claude research · salary, demand, competitor activity</span>
+      </div>
+      <div class="layer pillar pillar-accent">
+        <div style="display: flex; align-items: center;">
+          <span class="layer-tag">Pillar 2</span>
+          <span class="layer-name">Post-Offer Follow-Up</span>
+        </div>
+        <span class="layer-desc">Automated check-ins · state tracking · AI risk scoring · intervention nudges</span>
+      </div>
+      <div class="layer">
+        <span class="layer-name">Platform</span>
+        <span class="layer-desc">Dashboard · Activity Feed · Settings · 6-role permissions · company isolation</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>14</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 15 — WHO IT'S FOR                                                 -->
+<!-- ====================================================================== -->
+<section class="slide t-light">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">Who It's For</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow">Target market</div>
+    <h2>Recruiting agencies and<br>staffing firms — globally.</h2>
+
+    <div class="table-wrap" style="margin-top: 30px;">
+      <table>
+        <thead>
+          <tr><th style="width: 22%;">Tier</th><th>Description</th><th style="width: 26%;">Examples</th><th style="width: 16%;">Fit</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Boutique / Independent</strong></td>
+            <td>5–100 person firms · vertical or geo-focused · tens of thousands globally</td>
+            <td>IT staffing, fintech recruiters, healthcare boutiques</td>
+            <td><span class="pill pill-green">Primary Wedge</span></td>
+          </tr>
+          <tr>
+            <td><strong>Mid-Market Staffing</strong></td>
+            <td>$50M – $1B revenue · regional or vertical specialists</td>
+            <td>Insight Global, Page Group, Aerotek, Quess, Teamlease</td>
+            <td><span class="pill pill-accent">Expand Target</span></td>
+          </tr>
+          <tr>
+            <td><strong>Enterprise Staffing</strong></td>
+            <td>Multi-billion-dollar global firms · SOC2/ISO · multi-year cycles</td>
+            <td>Randstad, Adecco, ManpowerGroup, Allegis, Hays</td>
+            <td><span class="pill pill-brand">Aspirational</span></td>
+          </tr>
+          <tr>
+            <td><strong>Executive Search</strong></td>
+            <td>C-suite / board · low call volume · relationship-driven</td>
+            <td>Korn Ferry, Spencer Stuart, Heidrick &amp; Struggles</td>
+            <td><span class="pill pill-red">Not a Fit</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top: 30px; font-size: 18px; color: var(--text-2); text-align: center;">
+      <strong>Buyer:</strong> agency owner / MD &nbsp;·&nbsp; <strong>Champion:</strong> head of delivery &nbsp;·&nbsp; <strong>Users:</strong> recruiters, HR ops &nbsp;·&nbsp; <strong>External:</strong> hiring managers
+    </p>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>15</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 16 — COMPETITIVE LANDSCAPE                                        -->
+<!-- ====================================================================== -->
+<section class="slide t-light">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">Competitive Landscape</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow eyebrow-brand">Where Zeople wins</div>
+    <h2 style="font-size: 56px;">An <span class="brand-c">under-served intersection</span>.</h2>
+
+    <div class="table-wrap" style="margin-top: 24px;">
+      <table style="font-size: 15px;">
+        <thead>
+          <tr>
+            <th style="width: 36%; font-size: 12px;">Capability</th>
+            <th style="text-align: center; font-size: 12px;">Modern ATS<br><span style="font-weight: 400; opacity: 0.75; font-size: 11px;">Greenhouse, Lever</span></th>
+            <th style="text-align: center; font-size: 12px;">Legacy Agency ATS<br><span style="font-weight: 400; opacity: 0.75; font-size: 11px;">Bullhorn, Zoho</span></th>
+            <th style="text-align: center; font-size: 12px;">Call Intel<br><span style="font-weight: 400; opacity: 0.75; font-size: 11px;">Metaview, Gong</span></th>
+            <th style="text-align: center; font-size: 12px; background: linear-gradient(135deg, var(--brand), var(--brand-deep));">Zeople</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Agency-aware data model (fees, submissions, clients)</td><td class="cross-cell">—</td><td class="check-cell">✓</td><td class="cross-cell">—</td><td class="check-cell">✓</td></tr>
+          <tr><td>AI call evaluation — recruiting-specific</td><td class="cross-cell">—</td><td class="cross-cell">—</td><td class="partial-cell">~</td><td class="check-cell">✓</td></tr>
+          <tr><td>Per-call QA scorecards + coaching nudges</td><td class="cross-cell">—</td><td class="cross-cell">—</td><td class="partial-cell">~</td><td class="check-cell">✓</td></tr>
+          <tr><td>AI candidate evaluation from call</td><td class="cross-cell">—</td><td class="cross-cell">—</td><td class="cross-cell">—</td><td class="check-cell">✓</td></tr>
+          <tr><td>Post-offer state tracking (resign / BGV / joining)</td><td class="cross-cell">—</td><td class="cross-cell">—</td><td class="cross-cell">—</td><td class="check-cell">✓</td></tr>
+          <tr><td>AI drop-risk scoring + intervention nudges</td><td class="cross-cell">—</td><td class="cross-cell">—</td><td class="cross-cell">—</td><td class="check-cell">✓</td></tr>
+          <tr><td>AI content check on resumes</td><td class="cross-cell">—</td><td class="cross-cell">—</td><td class="cross-cell">—</td><td class="check-cell">✓</td></tr>
+          <tr><td>Market intelligence per role / geography</td><td class="cross-cell">—</td><td class="cross-cell">—</td><td class="cross-cell">—</td><td class="check-cell">✓</td></tr>
+          <tr><td>Integrated workflow (one product, not many)</td><td class="check-cell">✓</td><td class="check-cell">✓</td><td class="cross-cell">—</td><td class="check-cell">✓</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top: 16px; font-size: 14px; color: var(--text-3); text-align: center;"><strong style="color: var(--green);">✓</strong> native &nbsp;·&nbsp; <strong style="color: var(--amber);">~</strong> partial / via integrations &nbsp;·&nbsp; <strong style="color: var(--text-3);">—</strong> not offered</p>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>16</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 17 — NORTH STAR                                                   -->
+<!-- ====================================================================== -->
+<section class="slide t-navy">
+  <div class="brand-header">
+    <div class="logo-wrap">
+      <img src="zeople-logo.png" alt="Zeople">
+      <div class="wordmark">Zeople <span class="accent">RecruiterOS</span></div>
+    </div>
+    <div class="section-label">How We Measure Success</div>
+  </div>
+
+  <div class="content">
+    <div class="eyebrow">The North Star</div>
+    <h2 style="font-size: 56px;">One metric the entire<br>product is designed to move.</h2>
+
+    <div class="north-star-card">
+      <div class="ns-label">North Star Metric</div>
+      <div class="ns-metric">Placement-to-Join Conversion Rate</div>
+      <div class="ns-sub">(equivalently · the inverse of offer drop rate)</div>
+    </div>
+
+    <div class="kpi-tree">
+      <div class="kpi-line branch">↑ Placement-to-Join Conversion Rate</div>
+      <div class="kpi-line branch">├── Top-of-funnel quality <span class="muted">(CoPilot)</span></div>
+      <div class="kpi-line">│&nbsp;&nbsp;&nbsp;├── Avg QA score per recruiter</div>
+      <div class="kpi-line">│&nbsp;&nbsp;&nbsp;├── Submission → interview / offer conversion</div>
+      <div class="kpi-line">│&nbsp;&nbsp;&nbsp;└── AI content-check fail rate</div>
+      <div class="kpi-line branch">├── Pipeline efficiency <span class="muted">(Workflow)</span></div>
+      <div class="kpi-line">│&nbsp;&nbsp;&nbsp;├── Stage conversion rates + bottleneck detection</div>
+      <div class="kpi-line">│&nbsp;&nbsp;&nbsp;└── Time-in-stage · time-to-hire</div>
+      <div class="kpi-line branch">└── Offer protection <span class="muted">(POFU)</span></div>
+      <div class="kpi-line">&nbsp;&nbsp;&nbsp;&nbsp;├── Offer drop rate <span class="accent">(target: cut by 50%)</span></div>
+      <div class="kpi-line">&nbsp;&nbsp;&nbsp;&nbsp;├── Time-to-detect drop risk</div>
+      <div class="kpi-line">&nbsp;&nbsp;&nbsp;&nbsp;└── Risk-flagged candidates intervened</div>
+    </div>
+  </div>
+
+  <div class="slide-footer">
+    <span>Zeople · Product Overview</span>
+    <span>17</span>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- SLIDE 18 — CLOSING                                                      -->
+<!-- ====================================================================== -->
+<section class="slide t-navy closing-slide">
+  <div class="title-decoration" style="bottom: auto; top: -200px; left: -200px; right: auto; background: radial-gradient(circle, rgba(249,115,22,0.20) 0%, transparent 70%);"></div>
+  <div class="closing-content">
+    <img src="zeople-logo.png" alt="Zeople" class="closing-logo">
+    <div class="closing-statement">
+      <span class="brand-c">Zeople.</span><br>
+      Protecting agency revenue<br>
+      from the <span class="accent">first call</span> to <span class="accent">Day-1 join.</span>
+    </div>
+    <div class="closing-sub">The AI Co-Pilot for Recruiting Agencies and Staffing Firms.</div>
+  </div>
+  <div class="slide-footer">
+    <span>Zeople RecruiterOS · Product Overview · 2026</span>
+    <span>18</span>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

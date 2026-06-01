@@ -116,10 +116,50 @@ A coaching-focused view that surfaces every saved Per-Call QA Report in one plac
 
 ---
 
-### 13. Settings *(Superuser only)*
-Available to account owners (superuser role). Three tabs:
+### 13. Market Intelligence
+A 4-stage Claude research pipeline that produces a hiring-market report (salary bands, demand signals, talent pool, competitor activity, talent reputation) for a specific role and Indian location. Each report is created from a `JobContext` (title, location, industry, employment type, experience level, must-have skills) — either filled in by hand or extracted automatically by uploading a JD as PDF / DOCX / TXT, or pasting JD text.
+
+Behind the scenes:
+
+| Stage | Model | What it does |
+|------|------|------|
+| 0 | Haiku 4.5 | Parse uploaded/pasted JD into a structured JobContext (tool-use, enum-validated) |
+| 2 | Opus 4.7 | Web research with `web_search` + `web_fetch`, adaptive thinking |
+| 3 | Sonnet 4.6 | Structure the research into a JSON-schema-validated report payload |
+| 4 | Haiku 4.5 | Write the executive summary |
+| 5 | Sonnet 4.6 | *(optional refresh)* Glassdoor reputation enrichment for the top competitor companies |
+
+The form returns immediately with a `pending` row; the UI polls until status reaches `completed` or `failed`. Failed reports can be **retried** without re-running Stage 2 (the cached `research_doc` is reused, saving ~90s and the web-search cost). Completed reports are **editable** and can be refreshed for reputation data.
+
+Reports can optionally be linked to a job in the company's database (the link is shown in the list view).
+
+---
+
+### 14. Activity Feed *(Owner / Team Lead only)*
+A company-wide append-only log of who did what. Surfaces job creates/updates, assignee and hiring-manager attachments, hiring-manager feedback submissions, session creates, and per-candidate pipeline updates. Each row shows actor, action, target entity, summary, and a relative timestamp ("just now / 12 min ago / 3 d ago").
+
+A filter dropdown narrows the feed to Jobs / Sessions / Pipeline updates / Candidate feedback.
+
+The log is best-effort — `logActivity()` calls in route handlers never fail a request, so a stale or missing row never blocks user actions.
+
+---
+
+### 15. Hiring Manager Portal
+External hiring managers (`role = hiring_manager`) get a completely separate, slimmed-down portal — they bypass the normal recruiter sidebar entirely. The portal has two views:
+
+- **Your Jobs** — every job they've been attached to (`job_hiring_managers` join). Cards show client, location, top 4 required skills, and openings count.
+- **Job Detail** — the shortlist for a single job (only candidates that have passed or are on hold at the screening stage), with each candidate's match %, AI interview score, current pipeline status, and any recruiter note.
+
+For each shortlisted candidate the HM submits a structured **recommendation** (Strong Yes / Yes / Maybe / No / Strong No) and free-text notes. The form upserts on `(job_id, candidate_id, hm_user_id)` so re-opening a candidate restores their previous answer.
+
+HMs never see the candidate database, the pipeline session, or any other job. Every endpoint in `/hm/*` re-checks attachment via `job_hiring_managers` before returning data.
+
+---
+
+### 16. Settings *(Owner only)*
+Available to account owners (legacy `superuser` JWTs are still accepted). Three tabs:
 - **Company Info** — name, industry, website, address, contact email
-- **Team Management** — create recruiter accounts, set roles, activate or deactivate members
+- **Team Management** — create teammates with one of 5 internal roles (Owner / Team Lead / Sr Recruiter / Recruiter / Sourcer) or invite a Hiring Manager and attach them to specific jobs; activate or deactivate members
 - **My Account** — update display name and password
 
 ---
@@ -138,11 +178,35 @@ When a Decision is saved in Step 6 with a scheduled interview date, a notificati
 
 ## User Roles
 
-| Role | Access |
-|------|--------|
-| **Superuser** | Full access + Settings (team management, company info) |
-| **Admin** | Full access to all recruiting features |
-| **Sub-user** | Standard recruiter access |
+The platform has a 6-role hierarchy. Five roles are internal recruiting team members; **Hiring Manager** is the only external role (and gets the separate portal in §15).
+
+| Role | What they can do |
+|------|------------------|
+| **Owner** | Everything. The only role that can edit company info, manage billing, and invite or deactivate teammates. Sees all data across the company. |
+| **Team Lead** | Full access to all recruiting features. Sees all data across the company. Can manage job assignees and attach hiring managers, view team-level QA. Cannot edit company info or invite owners. |
+| **Sr Recruiter** | All recruiter features plus the ability to assign teammates and hiring managers to jobs. Sees only their own pipeline rows. |
+| **Recruiter** | Standard recruiter access — create jobs, run pipelines, place calls, send assessments, manage POFU. Sees only their own pipeline rows. |
+| **Sourcer** | Restricted to sourcing — Jobs / Candidate Database / Pipeline Step 3 (Source Candidates). Hidden from Calling CoPilot, JD Enhancer, POFU, evaluation modules, and Market Intelligence. |
+| **Hiring Manager** | External stakeholder. Bypasses the standard sidebar entirely and gets the slim portal in §15. Sees only candidates on jobs they're attached to. |
+
+Legacy JWTs with the older roles (`admin` → Owner, `superuser` → Owner, `subuser` → Recruiter) continue to work; the DB migration (`db.js`) remaps existing rows on first start of a new build.
+
+---
+
+## Permissions & Data Scoping
+
+Two layers control who sees what:
+
+**1. Capability map** (`server/middleware/permissions.js`) — every mutating endpoint declares a capability (e.g. `jobs.create`, `mi.write`, `pofu.write`); the map lists which roles hold that capability. The `requireCapability()` and `requireRole()` middlewares enforce it.
+
+**2. Row-level scoping** (`server/utils/scoping.js`) — read endpoints call `visibleUserIds(req)` to get the set of `user_ids` whose rows the caller is allowed to see:
+- **Owner / Team Lead** — every active member of their company
+- **Sr Recruiter / Recruiter / Sourcer** — only themselves
+- **Hiring Manager** — never goes through this path; HM endpoints scope by `job_hiring_managers` attachment instead
+
+On top of that, **company scoping** is enforced at the table level: `jobs.company_id`, `candidates.company_id`, and `mi_reports.company_id` are populated when a row is created and filtered on every read. A user from one company can never see data from another, even if they know the row ID.
+
+The pipeline is also **assignment-aware**: `job_assignees` powers the "My Jobs" filter in Jobs Management, and `job_hiring_managers` is the source of truth for which jobs each Hiring Manager sees.
 
 ---
 
@@ -191,8 +255,10 @@ Platforms compared: Greenhouse, Lever, Workday, iCIMS, ZOHO Recruit, CEIPAL, Sma
 ---
 
 ## Tech Stack (brief)
-- **Frontend:** React 18 + Vite
-- **Backend:** Node.js + Express
-- **Database:** SQLite (via better-sqlite3)
-- **AI:** Anthropic Claude (reports, evaluations, JD enhancement, POFU emails, AI content check)
-- **Communication:** Twilio (calls), Hostinger SMTP (emails), Deepgram (live transcription)
+- **Frontend:** React 18 + Vite (Hiring Managers get a separate slim portal at the same URL — no extra deployment)
+- **Backend:** Node.js + Express, with `express-ws` for the Twilio media-stream WebSocket and Socket.io (polling) for live transcript broadcast
+- **Database:** SQLite (via better-sqlite3, WAL mode), with idempotent in-app migrations on every start
+- **Auth:** JWT with bcrypt-hashed passwords; capability map + per-row scoping enforce 6-role permissions
+- **AI:** Anthropic Claude — Opus 4.7 / Sonnet 4.6 / Haiku 4.5 used across reports, evaluations, JD enhancement, POFU emails, AI content check, and the 4-stage Market Intelligence research pipeline (with `web_search` + `web_fetch` tool use)
+- **Communication:** Twilio (calls + recordings), Hostinger SMTP (assessment / VI / POFU emails), Deepgram (live dual-track transcription — recruiter + candidate on separate connections)
+- **Scheduling:** node-cron — POFU follow-up engine runs every 6 hours

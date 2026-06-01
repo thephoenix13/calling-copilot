@@ -14,7 +14,6 @@ const TABS = [
   { key: 'questions', label: 'Clarifications',  field: 'clarificationQuestions', editable: false },
   { key: 'reachout',  label: 'Reachout',        field: 'reachoutMaterial',       editable: true  },
   { key: 'keywords',  label: 'Keywords',        field: 'sourcingKeywords',       editable: false },
-  { key: 'market',    label: 'Market Intel',    field: 'marketIntelligence',     editable: false },
 ];
 
 const LOADING_STEPS = [

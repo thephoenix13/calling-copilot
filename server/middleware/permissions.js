@@ -79,6 +79,10 @@ const CAPABILITIES = {
   'mi.read.own':        ['owner', 'team_lead', 'sr_recruiter', 'recruiter'],
   'mi.read.team':       ['owner', 'team_lead'],
   'mi.write':           ['owner', 'team_lead', 'sr_recruiter', 'recruiter'],
+
+  // Ask MIS — on-demand reporting bot. Available to every role; data is
+  // automatically scoped per role inside the agent (see services/mis-scope.js).
+  'mis.read':           ['owner', 'team_lead', 'sr_recruiter', 'recruiter', 'sourcer', 'hiring_manager'],
 };
 
 function rolesForCapability(cap) {

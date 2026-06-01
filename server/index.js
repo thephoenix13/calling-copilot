@@ -65,6 +65,7 @@ app.use('/coding-assessments', require('./routes/coding-assessments'));
 app.use('/settings',           require('./routes/settings'));
 app.use('/hm',                 require('./routes/hm'));
 app.use('/mi',                 require('./routes/market-intelligence'));
+app.use('/ask-mis',            require('./routes/ask-mis'));
 
 // ── Recording status webhook ────────────────────────────────────────────────
 app.post('/recording-status', async (req, res) => {

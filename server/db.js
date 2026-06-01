@@ -620,6 +620,40 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_csub_invite ON coding_submissions(invite_id);
 `);
 
+// ── Ask MIS — conversation history for the on-demand reporting bot ──────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS mis_conversations (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    company_id  INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    title       TEXT    NOT NULL DEFAULT 'Untitled query',
+    pinned      INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_mis_conv_user ON mis_conversations(user_id, updated_at DESC);
+
+  CREATE TABLE IF NOT EXISTS mis_messages (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL REFERENCES mis_conversations(id) ON DELETE CASCADE,
+    role            TEXT    NOT NULL CHECK(role IN ('user','assistant')),
+    content         TEXT    NOT NULL,
+    sql_used        TEXT,
+    tables_json     TEXT,
+    latency_ms      INTEGER,
+    error           TEXT,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_mis_msg_conv ON mis_messages(conversation_id, id);
+`);
+
+// Read-only handle for the Ask MIS agent. Same DB file, opened separately so
+// even a buggy generated query cannot mutate state. Each request still opens
+// its own short-lived readonly handle for scope view installation; this shared
+// handle is exposed for callers that just need read-only access (e.g. tests).
+const dbReadOnly = new Database(DB_PATH, { readonly: true, fileMustExist: true });
+dbReadOnly.pragma('query_only = ON');
+
 // ── Schema migrations (safe, idempotent) ────────────────────────────────────
 (function runMigrations() {
   // Rebuild users table if role CHECK constraint doesn't include 'superuser'
@@ -812,4 +846,4 @@ function ensureCompanyScoping() {
   if (leadsBackfilled) console.log(`✅ [phase 2] Created lead assignee rows for ${leadsBackfilled} job(s)`);
 }
 
-module.exports = { db, seedUsers, ensureCompanyScoping };
+module.exports = { db, dbReadOnly, DB_PATH, seedUsers, ensureCompanyScoping };
