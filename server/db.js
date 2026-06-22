@@ -300,6 +300,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_vqe_evaluation ON video_question_evaluations(evaluation_id);
 `);
 
+// IDF Feature 2 — Confidence-Based Evaluation: a confidence score (separate from
+// the competence score) per question and overall, plus the signal breakdown.
+try { db.exec('ALTER TABLE video_question_evaluations ADD COLUMN confidence INTEGER'); } catch (_) {}
+try { db.exec('ALTER TABLE video_question_evaluations ADD COLUMN confidence_signals TEXT'); } catch (_) {}
+try { db.exec('ALTER TABLE video_evaluations ADD COLUMN confidence INTEGER'); } catch (_) {}
+try { db.exec('ALTER TABLE video_evaluations ADD COLUMN confidence_signals TEXT'); } catch (_) {}
+
 // ── Safe column migrations ─────────────────────────────────────────────────────
 // vi_interview_id on sessions — inserted when VI Scheduler step was added;
 // also triggers a one-time shift of current_step for existing sessions.
@@ -400,6 +407,14 @@ try { db.exec('ALTER TABLE jobs       ADD COLUMN company_id INTEGER REFERENCES c
 try { db.exec('ALTER TABLE candidates ADD COLUMN company_id INTEGER REFERENCES companies(id)'); } catch (_) {}
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_jobs_company_id       ON jobs(company_id)'); } catch (_) {}
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_candidates_company_id ON candidates(company_id)'); } catch (_) {}
+// Composite (company_id, created_at) — powers the default "latest N" list views;
+// without this, large candidate tables force a full sort on every list request.
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_candidates_company_created ON candidates(company_id, created_at)'); } catch (_) {}
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_jobs_company_created       ON jobs(company_id, created_at)'); } catch (_) {}
+// (company_id, status, created_at) covers the paginated list COUNT + ORDER BY in
+// one index — without status in the key, COUNT scans the whole company's rows.
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_candidates_company_status_created ON candidates(company_id, status, created_at)'); } catch (_) {}
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_jobs_company_status_created       ON jobs(company_id, status, created_at)'); } catch (_) {}
 
 // ── Phase 2: job assignment / ownership ───────────────────────────────────
 // Recruiters, sourcers, team leads can be ASSIGNED to a job. Visibility stays
@@ -645,6 +660,74 @@ db.exec(`
     created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_mis_msg_conv ON mis_messages(conversation_id, id);
+`);
+
+// ── Candidate Intelligence Map (claim store) — IDF Feature 1: Gap-Driven Probing ──
+// Structured, checkable claims pulled from a candidate's resume/JD. The live probe
+// path passes these through the request (no DB round-trip needed mid-call); this
+// table is the persistence surface that Confidence (#2) and Benchmarking (#5) will
+// reuse once a call/candidate id is known.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS candidate_claims (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_id      INTEGER REFERENCES calls(id) ON DELETE CASCADE,
+    candidate_id INTEGER REFERENCES candidates(id),
+    skill        TEXT,
+    claim        TEXT,
+    criticality  TEXT,
+    source       TEXT,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_candidate_claims_call ON candidate_claims(call_id);
+`);
+
+// ── Answer Corpus — IDF Feature 5: Benchmarking + Continuous Learning Loop (M8) ──
+// Anonymised at ingestion: ONLY company / role / skill / score — no candidate id,
+// name, or PII. Cohort statistics read from here; a minimum cohort size is enforced
+// at query time so we never show a percentile off a handful of samples.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS answer_corpus (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id  INTEGER,
+    role_family TEXT,
+    skill       TEXT,
+    score       INTEGER,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_corpus_cohort ON answer_corpus(company_id, skill);
+`);
+
+// ── Bias Detection & Mitigation — IDF Feature 3 (recruiter conduct, M7) ──────
+// Objective per-call recruiter metrics + flagged bias patterns. Bias is assessed
+// on the RECRUITER's conduct only; protected attributes are never stored.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS recruiter_call_metrics (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_id         INTEGER REFERENCES calls(id) ON DELETE CASCADE,
+    user_id         INTEGER REFERENCES users(id),
+    job_id          INTEGER,
+    question_count  INTEGER,
+    recruiter_chars INTEGER,
+    candidate_chars INTEGER,
+    talk_ratio_pct  INTEGER,
+    bias_score      INTEGER,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_rcm_user ON recruiter_call_metrics(user_id);
+  CREATE INDEX IF NOT EXISTS idx_rcm_call ON recruiter_call_metrics(call_id);
+
+  CREATE TABLE IF NOT EXISTS bias_flags (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_id    INTEGER REFERENCES calls(id) ON DELETE CASCADE,
+    user_id    INTEGER REFERENCES users(id),
+    type       TEXT,
+    severity   TEXT,
+    evidence   TEXT,
+    in_call    INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_bias_user ON bias_flags(user_id);
+  CREATE INDEX IF NOT EXISTS idx_bias_call ON bias_flags(call_id);
 `);
 
 // Read-only handle for the Ask MIS agent. Same DB file, opened separately so

@@ -3,6 +3,7 @@ const router  = express.Router();
 const { db }  = require('../db');
 const auth    = require('../middleware/auth');
 const { visibleUserIds } = require('../utils/scoping');
+const { benchmark } = require('../utils/corpus');
 
 router.use(auth);
 
@@ -635,7 +636,7 @@ router.get('/qa-list', (req, res) => {
     // everyone else sees only their own (Recruiter QA is the coaching surface
     // and a Team Lead reviewing call quality is the primary use case).
     const { ids, placeholders } = inSet(req);
-    if (ids.length === 0) return res.json({ stats: { totalReviewed: 0, avgScore: null, needsCoachingPct: 0, needsCoachingCount: 0, topWeakDimension: null }, rows: [] });
+    if (ids.length === 0) return res.json({ stats: { totalReviewed: 0, avgScore: null, needsCoachingPct: 0, needsCoachingCount: 0, topWeakDimension: null, biasFlaggedCount: 0, biasFlaggedPct: 0 }, rows: [] });
 
     const rows = db.prepare(`
       SELECT c.call_sid       AS callSid,
@@ -657,7 +658,7 @@ router.get('/qa-list', (req, res) => {
     `).all(...ids);
 
     const items = [];
-    let scoreSum = 0, scoreCount = 0, needsCoachingCount = 0;
+    let scoreSum = 0, scoreCount = 0, needsCoachingCount = 0, biasFlaggedCount = 0;
     const dimWeakTally = {};
 
     for (const row of rows) {
@@ -682,6 +683,13 @@ router.get('/qa-list', (req, res) => {
       if (Number.isFinite(score)) { scoreSum += score; scoreCount += 1; }
       if (score < 70) needsCoachingCount += 1;
 
+      // IDF Feature 3 — bias indicators from the QA payload
+      const bias = qa?.bias || {};
+      const biasFlagsArr = Array.isArray(bias.flags) ? bias.flags : [];
+      const biasFlagCount = biasFlagsArr.length;
+      const biasScore = Number.isFinite(Number(bias.score)) ? Number(bias.score) : null;
+      if (biasFlagsArr.some(f => f && (f.severity === 'high' || f.severity === 'medium'))) biasFlaggedCount += 1;
+
       items.push({
         callSid:          row.callSid,
         candidateName:    row.candidateName || qa?.meta?.candidate || '—',
@@ -695,6 +703,8 @@ router.get('/qa-list', (req, res) => {
         verdict,
         riskLevel,
         weakestDimension,
+        biasScore,
+        biasFlagCount,
       });
     }
 
@@ -710,11 +720,28 @@ router.get('/qa-list', (req, res) => {
         needsCoachingPct:  items.length > 0 ? Math.round(needsCoachingCount / items.length * 100) : 0,
         needsCoachingCount,
         topWeakDimension,
+        biasFlaggedCount,
+        biasFlaggedPct:    items.length > 0 ? Math.round(biasFlaggedCount / items.length * 100) : 0,
       },
       rows: items,
     });
   } catch (err) {
     console.error('[reports/qa-list]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /reports/benchmark?skill=&role=&score= — IDF Feature 5 ────────────────
+// Cohort percentile for a skill within the company. No LLM — plain stats, gated
+// by a minimum cohort size (returns insufficient:true below the threshold).
+router.get('/benchmark', (req, res) => {
+  try {
+    const { skill, role = '', score } = req.query;
+    if (!skill) return res.status(400).json({ error: 'skill is required' });
+    const companyId = db.prepare('SELECT company_id FROM users WHERE id=?').get(req.user.id)?.company_id ?? null;
+    res.json(benchmark({ companyId, roleFamily: role, skill, score: score == null ? 0 : Number(score) }));
+  } catch (err) {
+    console.error('[reports/benchmark]', err);
     res.status(500).json({ error: err.message });
   }
 });

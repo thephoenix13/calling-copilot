@@ -469,7 +469,7 @@ export default function CandidateEvaluationReport({ reportData: propData }) {
           </div>
 
           {[
-            ["Confidence",    verdict.confidence, "high"  ],
+            ["Confidence",    verdict.confidenceScore != null ? `${verdict.confidenceScore} · ${verdict.confidence}` : verdict.confidence, "high"  ],
             ["Risk Level",    verdict.riskLevel,  "low"   ],
             ["CTC Fit",       verdict.compensationFit ? "YES" : "NO", verdict.compensationFit ? "good" : "bad"],
             ["Raw Score",     `${rawScore}/${rawMax}`, "neutral"],

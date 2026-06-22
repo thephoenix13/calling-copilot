@@ -18,6 +18,11 @@ async function extractText(file, text) {
   return file.buffer.toString('utf8').trim();
 }
 
+// Rank a claim's criticality for sorting (high → low).
+function crit(level) {
+  return level === 'high' ? 2 : level === 'low' ? 0 : 1;
+}
+
 // ── POST /ai/generate-questions ──────────────────────────────────────────────
 // Body (multipart): jdFile?, jdText?, resumeFile?, resumeText?
 router.post(
@@ -40,10 +45,10 @@ ${resume ? `## Candidate Resume\n${resume}\n` : ''}
 Produce a JSON object with this exact shape:
 {
   "sections": [
-    {
-      "title": "Section name",
-      "questions": ["Question 1", "Question 2", ...]
-    }
+    { "title": "Section name", "questions": ["Question 1", "Question 2"] }
+  ],
+  "claims": [
+    { "skill": "Skill or area", "claim": "specific claim from the resume/JD to verify on the call", "criticality": "high|medium|low", "source": "resume|jd" }
   ]
 }
 
@@ -51,11 +56,12 @@ Rules:
 - 4–6 sections (e.g. Background & Motivation, Technical Skills, Problem Solving, Role-Specific, Culture & Fit, Closing)
 - 3–5 questions per section
 - Questions should be specific to the JD and resume provided
+- "claims" is a Candidate Intelligence Map: 5–12 concrete, checkable claims the recruiter should validate live (e.g. "led migration of 200 microservices to Kubernetes"). Set "criticality" by how central the skill is to the JD; set "source" to where the claim came from. If no resume is provided, derive claims from the JD's must-have skills.
 - Return ONLY the JSON, no markdown fences`;
 
       const response = await client.messages.create({
         model: 'claude-opus-4-6',
-        max_tokens: 4096,
+        max_tokens: 8192,
         messages: [{ role: 'user', content: prompt }],
       });
 
@@ -69,7 +75,10 @@ Rules:
         parsed = match ? JSON.parse(match[0]) : { sections: [] };
       }
 
-      res.json(parsed);
+      res.json({
+        sections: Array.isArray(parsed.sections) ? parsed.sections : [],
+        claims:   Array.isArray(parsed.claims)   ? parsed.claims   : [],
+      });
     } catch (err) {
       console.error('generate-questions error:', err.message);
       res.status(500).json({ error: err.message });
@@ -78,12 +87,15 @@ Rules:
 );
 
 // ── POST /ai/suggest ─────────────────────────────────────────────────────────
-// Body (JSON): { transcript: [{speaker, text}], currentQuestion: string }
+// Body (JSON): { transcript:[{speaker,text}], currentQuestion, jd, resume, claims }
+// IDF Feature 1 — Gap-Driven Probing: when a Candidate Intelligence Map (claims)
+// is supplied, follow-ups cross-check the candidate's answers against those claims
+// and prioritise high-criticality skills. Returns typed probes, not bare strings.
 router.post('/suggest', express.json(), async (req, res) => {
   try {
-    const { transcript = [], currentQuestion = '' } = req.body;
+    const { transcript = [], currentQuestion = '', jd = '', claims = [] } = req.body;
 
-    // Only look at last ~6 candidate utterances for context
+    // Only look at the last ~6 candidate utterances for context
     const candidateLines = transcript
       .filter(e => e.speaker === 'Candidate' && e.isFinal !== false)
       .slice(-6)
@@ -94,34 +106,63 @@ router.post('/suggest', express.json(), async (req, res) => {
       return res.json({ suggestions: [] });
     }
 
-    const prompt = `You are a live interview coach helping a recruiter. Based on what the candidate just said, suggest 2–3 sharp follow-up questions the recruiter should ask next.
+    // Compact the claim map: high-criticality first, capped for latency.
+    const claimList = (Array.isArray(claims) ? claims : [])
+      .slice()
+      .sort((a, b) => crit(b?.criticality) - crit(a?.criticality))
+      .slice(0, 12)
+      .map(c => `- [${c?.criticality || 'medium'}] ${c?.skill || ''}: ${c?.claim || ''}`)
+      .join('\n');
 
-${currentQuestion ? `Current question being discussed: "${currentQuestion}"\n` : ''}
-Recent candidate responses:
+    const prompt = `You are a live interview co-pilot for a recruiter. Based on what the candidate just said, suggest 2–3 sharp follow-up questions to ask next.
+
+${claimList ? `Candidate Intelligence Map — claims to validate (criticality in brackets):\n${claimList}\n\n` : ''}${jd ? `Job context: ${String(jd).slice(0, 600)}\n\n` : ''}${currentQuestion ? `Current question being discussed: "${currentQuestion}"\n\n` : ''}Recent candidate responses:
 ${candidateLines}
 
-Rules:
-- Return ONLY a JSON array of strings, e.g. ["Question 1?", "Question 2?"]
-- Keep questions concise (under 20 words each)
-- Dig deeper into what the candidate said, probe for specifics or examples
-- No markdown, no extra text`;
+How to choose follow-ups:
+- If an answer is vague, contradicts a claim, or lacks the depth you'd expect for the experience claimed, generate a probe that tests that specific claim.
+- Prioritise probes on HIGH-criticality skills.
+- Choose a "type" for each: "cross_check" (verify a claim or something said earlier), "drill_down" (test how deep the knowledge really goes), or "scenario" (a situation pitched to their seniority).
+
+Return ONLY a JSON array, no markdown. Each item:
+{"question":"<under 20 words>","type":"cross_check|drill_down|scenario","claim_tested":"<skill/claim being tested, or null>","reason":"<why, under 12 words>"}`;
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
+      max_tokens: 700,
       messages: [{ role: 'user', content: prompt }],
     });
 
     const raw = response.content.find(b => b.type === 'text')?.text || '[]';
-    let suggestions;
+    let parsed;
     try {
-      suggestions = JSON.parse(raw);
+      parsed = JSON.parse(raw);
     } catch {
       const match = raw.match(/\[[\s\S]*\]/);
-      suggestions = match ? JSON.parse(match[0]) : [];
+      parsed = match ? JSON.parse(match[0]) : [];
     }
 
-    res.json({ suggestions: Array.isArray(suggestions) ? suggestions : [] });
+    // Normalize to typed-probe objects; tolerate a bare string array as a fallback.
+    const suggestions = (Array.isArray(parsed) ? parsed : [])
+      .map(item => {
+        if (typeof item === 'string') {
+          return { question: item, type: 'drill_down', claim_tested: null, reason: '' };
+        }
+        if (item && typeof item === 'object' && item.question) {
+          const type = ['cross_check', 'drill_down', 'scenario'].includes(item.type) ? item.type : 'drill_down';
+          return {
+            question: String(item.question),
+            type,
+            claim_tested: item.claim_tested ? String(item.claim_tested) : null,
+            reason: item.reason ? String(item.reason) : '',
+          };
+        }
+        return null;
+      })
+      .filter(Boolean)
+      .slice(0, 3);
+
+    res.json({ suggestions });
   } catch (err) {
     console.error('suggest error:', err.message);
     res.status(500).json({ error: err.message });
@@ -234,15 +275,16 @@ Return a single JSON object with exactly two keys: "qaReport" and "candidateRepo
     { "id": 8, "dimension": "Close & Candidate Experience", "weight": "5%", "score": <0-5>, "max": 5, "pct": <0-100>, "evidence": "<string>", "quote": "<quote>", "status": "<pass|warn|fail>" }
   ],
   "redFlags": [ { "severity": "<critical|high|medium>", "text": "<string>" } ],
-  "nudges": [ { "label": "<short label>", "icon": "💡", "weak": "<example of weak phrasing from transcript>", "better": "<improved version>", "why": "<one sentence explanation>" } ]
+  "nudges": [ { "label": "<short label>", "icon": "💡", "weak": "<example of weak phrasing from transcript>", "better": "<improved version>", "why": "<one sentence explanation>" } ],
+  "bias": { "score": <0-100, higher = cleaner / less bias risk>, "flags": [ { "type": "<leading_question|confirmation_bias|interrupting|uneven_focus>", "severity": "<low|medium|high>", "evidence": "<recruiter quote or behaviour from the transcript>" } ], "summary": "<1-2 sentences on the RECRUITER's interviewing conduct>" }
 }
 
 "candidateReport" must match this shape exactly:
 {
   "meta": { "candidate": "${candidateName}", "initials": "XX", "role": "${role}", "client": "Demo", "recruiter": "${recruiterName}", "date": "${dateStr}", "time": "${timeStr}", "duration": "estimated", "reportId": "CER-SIM-${callId.slice(-8)}", "experience": "unknown", "currentCompany": "unknown", "currentTitle": "unknown", "location": "unknown", "currentCTC": "unknown", "expectedCTC": "unknown", "budgetRange": "unknown", "noticePeriod": "unknown", "linkedIn": "" },
-  "verdict": { "score": <0-100>, "label": "<HIRE|HOLD|NO_HIRE>", "confidence": "<Low|Medium|High>", "nextStep": "<string>", "riskLevel": "<Low|Medium|High>", "compensationFit": "<YES|NO|UNKNOWN>" },
+  "verdict": { "score": <0-100>, "label": "<HIRE|HOLD|NO_HIRE>", "confidence": "<Low|Medium|High>", "confidenceScore": <0-100>, "confidenceSignals": { "consistency": <0-100>, "specificity": <0-100>, "alignment": <0-100>, "hedging": <0-100> }, "nextStep": "<string>", "riskLevel": "<Low|Medium|High>", "compensationFit": "<YES|NO|UNKNOWN>" },
   "technical": [
-    { "id": 1, "area": "Technical Knowledge", "score": <0-20>, "max": 20, "pct": <0-100>, "status": "<pass|warn|fail>", "weight": "20%", "notes": "<string>", "quote": "<quote or empty>" },
+    { "id": 1, "area": "Technical Knowledge", "score": <0-20>, "max": 20, "pct": <0-100>, "confidence": <0-100>, "status": "<pass|warn|fail>", "weight": "20%", "notes": "<string>", "quote": "<quote or empty>" },
     { "id": 2, "area": "Communication", "score": <0-20>, "max": 20, "pct": <0-100>, "status": "<pass|warn|fail>", "weight": "20%", "notes": "<string>", "quote": "<quote or empty>" },
     { "id": 3, "area": "Role Fit", "score": <0-15>, "max": 15, "pct": <0-100>, "status": "<pass|warn|fail>", "weight": "15%", "notes": "<string>", "quote": "<quote or empty>" },
     { "id": 4, "area": "Problem Solving", "score": <0-15>, "max": 15, "pct": <0-100>, "status": "<pass|warn|fail>", "weight": "15%", "notes": "<string>", "quote": "<quote or empty>" },
@@ -266,13 +308,15 @@ Return a single JSON object with exactly two keys: "qaReport" and "candidateRepo
 
 Rules:
 - Use ONLY information from the transcript. Do not invent facts not present.
+- CONFIDENCE is separate from the competence score: it is how sure you are that the candidate genuinely demonstrated the skill, based on the call. Score each technical item's "confidence" (0-100) and an overall "verdict.confidenceScore" (0-100). Build it from these signals (each 0-100 in "verdict.confidenceSignals"): consistency (answers don't contradict each other), specificity (concrete detail vs vague), alignment (verbal answers match the resume/JD claims), hedging (confident language vs hedging/uncertainty — higher = less hedging). A high score with low confidence means "claims look good but weren't really evidenced on the call."
+- BIAS (qaReport.bias): assess ONLY the RECRUITER's interviewing conduct — leading or loaded questions, confirmation bias (pulling on evidence that confirms an early impression), interrupting / not letting the candidate finish, and uneven focus (over- or under-questioning relative to the role). FAIRNESS GUARDRAILS: never use, infer, or mention a candidate's protected attributes (race, gender, age, religion, nationality, disability, etc.); flag interaction PATTERNS only, and never penalise the candidate for the recruiter's bias. If conduct looks balanced, return an empty flags array and a high score.
 - For quote fields, use actual verbatim text from the transcript (or empty string if nothing fits).
 - All arrays must have at least one item.
 - Return ONLY the JSON object. No markdown, no fences, no explanation.`;
 
     const response = await client.messages.create({
       model: 'claude-opus-4-6',
-      max_tokens: 4096,
+      max_tokens: 8192,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -288,6 +332,22 @@ Rules:
     if (!parsed.qaReport || !parsed.candidateReport) {
       return res.status(500).json({ error: 'Report generation returned incomplete data.' });
     }
+
+    // IDF Feature 3 — attach DETERMINISTIC recruiter conduct metrics (computed
+    // server-side from the transcript, not LLM-guessed) onto qaReport.bias.
+    const rTurns = transcript.filter(e => e.speaker === 'Recruiter' && e.isFinal !== false);
+    const cTurns = transcript.filter(e => e.speaker === 'Candidate' && e.isFinal !== false);
+    const recruiterChars = rTurns.reduce((a, e) => a + (e.text || '').length, 0);
+    const candidateChars = cTurns.reduce((a, e) => a + (e.text || '').length, 0);
+    const questionCount  = rTurns.reduce((a, e) => a + ((e.text || '').match(/\?/g) || []).length, 0);
+    const totalChars = recruiterChars + candidateChars;
+    parsed.qaReport.bias = parsed.qaReport.bias || {};
+    parsed.qaReport.bias.metrics = {
+      questionCount,
+      recruiterChars,
+      candidateChars,
+      talkRatioPct: totalChars ? Math.round((recruiterChars / totalChars) * 100) : null,
+    };
 
     res.json({ qaReport: parsed.qaReport, candidateReport: parsed.candidateReport });
   } catch (err) {

@@ -4,6 +4,7 @@ const { db } = require('../db');
 const authMiddleware = require('../middleware/auth');
 const { requireCapability } = require('../middleware/permissions');
 const { visibleUserIds } = require('../utils/scoping');
+const { recordCorpus } = require('../utils/corpus');
 
 // POST /calls/start — create a call record linked to the authenticated user
 router.post('/start', authMiddleware, requireCapability('calls.start'), (req, res) => {
@@ -60,6 +61,41 @@ router.post('/:callSid/reports', authMiddleware, requireCapability('calls.start'
          DO UPDATE SET jd_text = excluded.jd_text, resume_text = excluded.resume_text`
       ).run(call.id, jd || null, resume || null);
     }
+
+    // IDF Feature 5 — feed the anonymised answer corpus from the candidate scorecard (best-effort)
+    try {
+      if (candidateReport && Array.isArray(candidateReport.technical)) {
+        const companyId = db.prepare('SELECT company_id FROM users WHERE id=?').get(req.user.id)?.company_id ?? null;
+        const role = (candidateReport.meta && candidateReport.meta.role) || req.body.role || '';
+        const items = candidateReport.technical.map(t => ({ skill: t.area, score: t.pct }));
+        recordCorpus(companyId, role, items);
+      }
+    } catch (e) { console.error('[calls] corpus ingest:', e.message); }
+
+    // IDF Feature 3 — persist recruiter conduct metrics + bias flags (best-effort, idempotent)
+    try {
+      if (qaReport && qaReport.bias) {
+        const b = qaReport.bias;
+        const m = b.metrics || {};
+        db.prepare('DELETE FROM recruiter_call_metrics WHERE call_id=?').run(call.id);
+        db.prepare('DELETE FROM bias_flags WHERE call_id=?').run(call.id);
+        db.prepare(
+          `INSERT INTO recruiter_call_metrics
+             (call_id, user_id, job_id, question_count, recruiter_chars, candidate_chars, talk_ratio_pct, bias_score)
+           VALUES (?,?,?,?,?,?,?,?)`
+        ).run(call.id, req.user.id, null, m.questionCount ?? null, m.recruiterChars ?? null,
+              m.candidateChars ?? null, m.talkRatioPct ?? null, b.score ?? null);
+        if (Array.isArray(b.flags) && b.flags.length) {
+          const insFlag = db.prepare(
+            'INSERT INTO bias_flags (call_id, user_id, type, severity, evidence, in_call) VALUES (?,?,?,?,?,0)'
+          );
+          const txF = db.transaction(fs => {
+            for (const f of fs) insFlag.run(call.id, req.user.id, f.type || null, f.severity || null, f.evidence || null);
+          });
+          txF(b.flags);
+        }
+      }
+    } catch (e) { console.error('[calls] bias persist:', e.message); }
 
     res.json({ ok: true });
   } catch (err) {

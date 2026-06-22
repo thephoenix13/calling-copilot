@@ -11,6 +11,7 @@ export default function InterviewPanel({ transcript, callStatus, initialJd, init
 
   // ── Generated questions ──────────────────────────────────────────────────
   const [sections, setSections] = useState([]);
+  const [claims, setClaims] = useState([]);   // Candidate Intelligence Map (IDF Feature 1)
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState('');
   const [checkedQuestions, setCheckedQuestions] = useState(new Set());
@@ -58,6 +59,7 @@ export default function InterviewPanel({ transcript, callStatus, initialJd, init
       }
       const data = await res.json();
       setSections(data.sections || []);
+      setClaims(Array.isArray(data.claims) ? data.claims : []);
       setCheckedQuestions(new Set());
     } catch (err) {
       setGenError(err.message);
@@ -76,7 +78,7 @@ export default function InterviewPanel({ transcript, callStatus, initialJd, init
       const res = await fetch(`${BACKEND_URL}/ai/suggest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript: finalTranscript, currentQuestion }),
+        body: JSON.stringify({ transcript: finalTranscript, currentQuestion, jd: jdText, resume: resumeText, claims }),
       });
       if (!res.ok) return;
       const { suggestions: s } = await res.json();
@@ -86,7 +88,7 @@ export default function InterviewPanel({ transcript, callStatus, initialJd, init
     } finally {
       setSuggestLoading(false);
     }
-  }, [transcript, currentQuestion, callStatus]);
+  }, [transcript, currentQuestion, callStatus, jdText, resumeText, claims]);
 
   useEffect(() => {
     // Only trigger when new final Candidate lines appear
@@ -276,12 +278,28 @@ export default function InterviewPanel({ transcript, callStatus, initialJd, init
               : 'Start a call to see live suggestions.'}
           </div>
         )}
-        {suggestions.map((s, i) => (
-          <div key={i} className="ip-suggestion-item">
-            <span className="ip-suggestion-num">{i + 1}</span>
-            <span className="ip-suggestion-text">{s}</span>
-          </div>
-        ))}
+        {suggestions.map((s, i) => {
+          const text   = typeof s === 'string' ? s : (s?.question || '');
+          const type   = typeof s === 'object' && s ? s.type : null;
+          const reason = typeof s === 'object' && s ? s.reason : '';
+          const claim  = typeof s === 'object' && s ? s.claim_tested : null;
+          const typeLabel = { cross_check: 'Cross-check', drill_down: 'Drill down', scenario: 'Scenario' }[type] || null;
+          return (
+            <div key={i} className="ip-suggestion-item">
+              <span className="ip-suggestion-num">{i + 1}</span>
+              <div className="ip-suggestion-body">
+                <span className="ip-suggestion-text">{text}</span>
+                {(typeLabel || claim || reason) && (
+                  <div className="ip-suggestion-meta">
+                    {typeLabel && <span className={`ip-probe-tag ip-probe-${type}`}>{typeLabel}</span>}
+                    {claim && <span className="ip-probe-claim">tests: {claim}</span>}
+                    {reason && <span className="ip-probe-reason">{reason}</span>}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

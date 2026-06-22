@@ -9,6 +9,7 @@ const { db }    = require('../db');
 const auth      = require('../middleware/auth');
 const { sendEmail }       = require('../utils/mailer');
 const { buildInviteEmail } = require('../utils/emailTemplates');
+const { recordCorpus }    = require('../utils/corpus');
 
 const anthropic      = new Anthropic();
 // Skip Deepgram setup when no key is configured (createClient throws on a
@@ -529,6 +530,8 @@ ${r.transcription || '(no transcription available)'}
 Provide a comprehensive evaluation in this EXACT JSON format:
 {
   "overall_score": <number 0-100>,
+  "confidence": <0-100>,
+  "confidence_signals": { "consistency": <0-100>, "specificity": <0-100>, "alignment": <0-100>, "hedging": <0-100> },
   "hiring_recommendation": "<strong_fit|good_fit|needs_review|not_recommended>",
   "evaluation_summary": "<2-3 sentence summary>",
   "strengths": ["<strength 1>", "<strength 2>"],
@@ -545,6 +548,8 @@ Provide a comprehensive evaluation in this EXACT JSON format:
     {
       "question_index": 0,
       "score": <0-100>,
+      "confidence": <0-100>,
+      "confidence_signals": { "consistency": <0-100>, "specificity": <0-100>, "alignment": <0-100>, "hedging": <0-100> },
       "relevance_score": <0-100>,
       "clarity_score": <0-100>,
       "completeness_score": <0-100>,
@@ -553,6 +558,8 @@ Provide a comprehensive evaluation in this EXACT JSON format:
     }
   ]
 }
+
+CONFIDENCE is separate from the score: it is how sure you are the candidate genuinely demonstrated the skill in their answer, not how good the answer sounds. Build each "confidence" (0-100) from the signals (each 0-100): consistency (no self-contradiction across answers), specificity (concrete detail vs vague/generic), alignment (the answer matches the JD/role expectations), hedging (confident vs hedging language — higher = less hedging). A strong-sounding but vague or hedged answer should score high but with LOW confidence.
 
 Return ONLY the JSON, no additional text.`;
 
@@ -575,8 +582,8 @@ Return ONLY the JSON, no additional text.`;
     const evalResult = db.prepare(`
       INSERT INTO video_evaluations
         (candidate_id, interview_id, overall_score, hiring_recommendation, evaluation_summary,
-         strengths, weaknesses, competency_scores, behavioral_insights)
-      VALUES (?,?,?,?,?,?,?,?,?)
+         strengths, weaknesses, competency_scores, behavioral_insights, confidence, confidence_signals)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)
     `).run(
       vc.id, iv.id,
       evaluation.overall_score,
@@ -586,6 +593,8 @@ Return ONLY the JSON, no additional text.`;
       JSON.stringify(evaluation.weaknesses || []),
       JSON.stringify(evaluation.competency_scores || {}),
       evaluation.behavioral_insights || '',
+      evaluation.confidence ?? null,
+      JSON.stringify(evaluation.confidence_signals || {}),
     );
 
     const evalId = evalResult.lastInsertRowid;
@@ -594,8 +603,8 @@ Return ONLY the JSON, no additional text.`;
     const insertQE = db.prepare(`
       INSERT INTO video_question_evaluations
         (evaluation_id, question_id, score, relevance_score, clarity_score, completeness_score,
-         analysis, keywords_found, response_transcription)
-      VALUES (?,?,?,?,?,?,?,?,?)
+         analysis, keywords_found, response_transcription, confidence, confidence_signals)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)
     `);
     const insertAllQE = db.transaction((qes) => {
       qes.forEach((qe) => {
@@ -607,6 +616,8 @@ Return ONLY the JSON, no additional text.`;
           qe.analysis || '',
           JSON.stringify(qe.keywords_found || []),
           response.transcription || '',
+          qe.confidence ?? null,
+          JSON.stringify(qe.confidence_signals || {}),
         );
       });
     });
@@ -614,6 +625,13 @@ Return ONLY the JSON, no additional text.`;
 
     // Update candidate status
     db.prepare(`UPDATE video_candidates SET status='evaluated' WHERE id=?`).run(vc.id);
+
+    // IDF Feature 5 — feed the anonymised answer corpus from competency scores (best-effort)
+    try {
+      const companyId = db.prepare('SELECT company_id FROM users WHERE id=?').get(req.user.id)?.company_id ?? null;
+      const items = Object.entries(evaluation.competency_scores || {}).map(([skill, score]) => ({ skill, score }));
+      recordCorpus(companyId, iv.title || iv.job_description || '', items);
+    } catch (e) { console.error('[VI] corpus ingest:', e.message); }
 
     res.json({ ok: true, overall_score: evaluation.overall_score, hiring_recommendation: evaluation.hiring_recommendation });
   } catch (err) {
@@ -646,13 +664,15 @@ router.get('/candidates/:cid/report', (req, res) => {
     interview: iv,
     evaluation: {
       ...evaluation,
-      strengths:         parseJSON(evaluation.strengths)         || [],
-      weaknesses:        parseJSON(evaluation.weaknesses)        || [],
-      competency_scores: parseJSON(evaluation.competency_scores) || {},
+      strengths:          parseJSON(evaluation.strengths)          || [],
+      weaknesses:         parseJSON(evaluation.weaknesses)         || [],
+      competency_scores:  parseJSON(evaluation.competency_scores)  || {},
+      confidence_signals: parseJSON(evaluation.confidence_signals) || {},
     },
     questionEvals: questionEvals.map(qe => ({
       ...qe,
-      keywords_found: parseJSON(qe.keywords_found) || [],
+      keywords_found:     parseJSON(qe.keywords_found)     || [],
+      confidence_signals: parseJSON(qe.confidence_signals) || {},
     })),
   });
 });

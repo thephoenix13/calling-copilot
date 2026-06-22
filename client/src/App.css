@@ -2864,6 +2864,19 @@ body {
   color: var(--text-1);
 }
 
+/* Gap-Driven Probing: typed-probe metadata (IDF Feature 1) */
+.ip-suggestion-body { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.ip-suggestion-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ip-probe-tag {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 10px; color: #fff; background: var(--text-2, #6b7280);
+}
+.ip-probe-cross_check { background: #b45309; }   /* amber — verify a claim */
+.ip-probe-drill_down  { background: #1d4ed8; }   /* blue — depth */
+.ip-probe-scenario    { background: #6d28d9; }   /* violet — situational */
+.ip-probe-claim  { font-size: 10.5px; color: var(--text-2, #6b7280); font-style: italic; }
+.ip-probe-reason { font-size: 10.5px; color: var(--text-2, #6b7280); }
+
 /* ══════════════════════════════════════════════════════════════════════════
    JD Enhancer
    ══════════════════════════════════════════════════════════════════════════ */
