@@ -150,14 +150,15 @@ export default function WelcomeDashboard({ displayName, onNavigate, authFetch })
   useEffect(() => {
     if (!authFetch) return;
     Promise.all([
-      authFetch(`${BACKEND_URL}/jobs`).then(r => r.json()).catch(() => null),
-      authFetch(`${BACKEND_URL}/candidates`).then(r => r.json()).catch(() => null),
+      // limit=1 → we only need the `total`, not the rows
+      authFetch(`${BACKEND_URL}/jobs?status=active&limit=1`).then(r => r.json()).catch(() => null),
+      authFetch(`${BACKEND_URL}/candidates?status=active&limit=1`).then(r => r.json()).catch(() => null),
       authFetch(`${BACKEND_URL}/sessions`).then(r => r.json()).catch(() => null),
     ]).then(([jobsData, candidatesData, sessionsData]) => {
       const allSessions = sessionsData?.sessions || [];
       setStats({
-        jobs:       jobsData?.jobs?.length       ?? 0,
-        candidates: candidatesData?.candidates?.length ?? 0,
+        jobs:       jobsData?.total       ?? null,
+        candidates: candidatesData?.total ?? null,
         sessions:   allSessions.length,
       });
       setSessions(allSessions.slice(0, 5));
