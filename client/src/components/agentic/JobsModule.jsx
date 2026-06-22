@@ -1128,6 +1128,9 @@ export default function JobsModule({ authFetch, userRole, isLight, onToggleTheme
   const [statusFilter,setStatusFilter]= useState('all');
   const [assignFilter,setAssignFilter]= useState('all'); // 'all' | 'me'
   const [search,      setSearch]      = useState('');
+  const [page,        setPage]        = useState(1);
+  const [total,       setTotal]       = useState(0);
+  const PAGE_SIZE = 50;
   const [view,        setView]        = useState('list'); // 'list' | 'form' | 'detail'
   const [editJob,     setEditJob]     = useState(null);
   const [detailJob,   setDetailJob]   = useState(null);
@@ -1144,21 +1147,25 @@ export default function JobsModule({ authFetch, userRole, isLight, onToggleTheme
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
       if (statusFilter !== 'all')          params.set('status', statusFilter);
       if (assignFilter === 'me')           params.set('assigned_to', 'me');
       if (search.trim())                   params.set('search', search.trim());
       const res  = await authFetch(`${BACKEND_URL}/jobs?${params}`);
       const data = await res.json();
       setJobs(data.jobs || []);
+      setTotal(data.total ?? (data.jobs?.length || 0));
     } catch {
       setJobs([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [authFetch, statusFilter, assignFilter, search]);
+  }, [authFetch, statusFilter, assignFilter, search, page]);
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
+  // Reset to page 1 when filters/search change
+  useEffect(() => { setPage(1); }, [statusFilter, assignFilter, search]);
 
   const handleSave = (savedJob) => {
     setJobs(prev => {
@@ -1293,6 +1300,7 @@ export default function JobsModule({ authFetch, userRole, isLight, onToggleTheme
             <table className="ag-table">
               <thead>
                 <tr>
+                  <th style={{ width: 48 }}>#</th>
                   <th>Title</th>
                   <th>Client</th>
                   <th>Lead</th>
@@ -1306,10 +1314,11 @@ export default function JobsModule({ authFetch, userRole, isLight, onToggleTheme
                 </tr>
               </thead>
               <tbody>
-                {jobs.map(job => {
+                {jobs.map((job, i) => {
                   const sc = STATUS_COLORS[job.status] || STATUS_COLORS.closed;
                   return (
                     <tr key={job.id}>
+                      <td className="ag-td-muted">{(page - 1) * PAGE_SIZE + i + 1}</td>
                       <td className="ag-td-title">
                         <button className="ag-job-title ag-job-title--link" onClick={() => openDetail(job)}>{job.title}</button>
                         {job.department && <span className="ag-job-dept">{job.department}</span>}
@@ -1359,6 +1368,19 @@ export default function JobsModule({ authFetch, userRole, isLight, onToggleTheme
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {!loading && total > PAGE_SIZE && (
+          <div className="ag-pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-3)' }}>
+              Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total.toLocaleString()}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button className="ag-btn ag-btn--ghost" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>← Prev</button>
+              <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Page {page} of {Math.max(1, Math.ceil(total / PAGE_SIZE))}</span>
+              <button className="ag-btn ag-btn--ghost" disabled={page >= Math.ceil(total / PAGE_SIZE)} onClick={() => setPage(p => p + 1)}>Next →</button>
+            </div>
           </div>
         )}
       </div>

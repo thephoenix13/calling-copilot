@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+const PAGE_SIZE = 50;
 
 // ── Skills input (shared) ────────────────────────────────────────────────────
 function SkillsInput({ value, onChange, placeholder }) {
@@ -429,6 +430,8 @@ export default function CandidatesModule({ authFetch, isLight, onToggleTheme, on
   const [candidates, setCandidates] = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [search,     setSearch]     = useState('');
+  const [page,       setPage]       = useState(1);
+  const [total,      setTotal]      = useState(0);
   const [view,       setView]       = useState('list'); // 'list' | 'form' | 'profile'
   const [selected,   setSelected]   = useState(null);
   const [deleteId,   setDeleteId]   = useState(null);
@@ -437,19 +440,23 @@ export default function CandidatesModule({ authFetch, isLight, onToggleTheme, on
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ status: 'active' });
+      const params = new URLSearchParams({ status: 'active', page: String(page), limit: String(PAGE_SIZE) });
       if (search.trim()) params.set('search', search.trim());
       const res  = await authFetch(`${BACKEND_URL}/candidates?${params}`);
       const data = await res.json();
       setCandidates(data.candidates || []);
+      setTotal(data.total ?? (data.candidates?.length || 0));
     } catch {
       setCandidates([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [authFetch, search]);
+  }, [authFetch, search, page]);
 
   useEffect(() => { fetchCandidates(); }, [fetchCandidates]);
+  // Reset to page 1 whenever the search term changes
+  useEffect(() => { setPage(1); }, [search]);
 
   const handleSave = (saved) => {
     setCandidates(prev => {
@@ -545,6 +552,7 @@ export default function CandidatesModule({ authFetch, isLight, onToggleTheme, on
             <table className="ag-table">
               <thead>
                 <tr>
+                  <th style={{ width: 48 }}>#</th>
                   <th>Name</th>
                   <th>Current Role</th>
                   <th>Company</th>
@@ -555,8 +563,9 @@ export default function CandidatesModule({ authFetch, isLight, onToggleTheme, on
                 </tr>
               </thead>
               <tbody>
-                {candidates.map(c => (
+                {candidates.map((c, i) => (
                   <tr key={c.id} className="ag-tr-clickable" onClick={() => { setSelected(c); setView('profile'); }}>
+                    <td className="ag-td-muted">{(page - 1) * PAGE_SIZE + i + 1}</td>
                     <td>
                       <div className="ag-candidate-name">{c.name}</div>
                       {c.email && <div className="ag-candidate-email">{c.email}</div>}
@@ -583,6 +592,19 @@ export default function CandidatesModule({ authFetch, isLight, onToggleTheme, on
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {!loading && total > PAGE_SIZE && (
+          <div className="ag-pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-3)' }}>
+              Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} of {total.toLocaleString()}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button className="ag-btn ag-btn--ghost" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>← Prev</button>
+              <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Page {page} of {Math.max(1, Math.ceil(total / PAGE_SIZE))}</span>
+              <button className="ag-btn ag-btn--ghost" disabled={page >= Math.ceil(total / PAGE_SIZE)} onClick={() => setPage(p => p + 1)}>Next →</button>
+            </div>
           </div>
         )}
       </div>

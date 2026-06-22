@@ -51,21 +51,26 @@ function parseCandidate(c) {
 // GET /candidates — list candidates for the current user's company
 router.get('/', (req, res) => {
   const { search, status } = req.query;
-  let q = 'SELECT * FROM candidates WHERE company_id = ?';
+  const limit  = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
+  const page   = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const offset = (page - 1) * limit;
+
+  let where = 'WHERE company_id = ?';
   const params = [req.user.company_id];
 
-  if (status && status !== 'all') { q += ' AND status = ?'; params.push(status); }
-  else                            { q += " AND status = 'active'"; }
+  if (status && status !== 'all') { where += ' AND status = ?'; params.push(status); }
+  else                            { where += " AND status = 'active'"; }
 
   if (search) {
-    q += ' AND (name LIKE ? OR email LIKE ? OR current_title LIKE ? OR current_company LIKE ?)';
+    where += ' AND (name LIKE ? OR email LIKE ? OR current_title LIKE ? OR current_company LIKE ?)';
     const s = `%${search}%`;
     params.push(s, s, s, s);
   }
-  q += ' ORDER BY created_at DESC LIMIT 200';
 
-  const candidates = db.prepare(q).all(...params);
-  res.json({ candidates: candidates.map(parseCandidate) });
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM candidates ${where}`).get(...params).n;
+  const rows  = db.prepare(`SELECT * FROM candidates ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+                  .all(...params, limit, offset);
+  res.json({ candidates: rows.map(parseCandidate), total, page, limit });
 });
 
 // GET /candidates/:id

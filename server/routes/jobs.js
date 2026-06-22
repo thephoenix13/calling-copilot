@@ -49,6 +49,29 @@ function parseJob(j) {
 //   ?search=...      → match on title / client / location
 router.get('/', (req, res) => {
   const { status, search, assigned_to } = req.query;
+  const params = [req.user.company_id];
+  let cond = '';
+
+  if (assigned_to === 'me') {
+    cond += ` AND EXISTS (SELECT 1 FROM job_assignees ja
+                          WHERE ja.job_id = j.id AND ja.user_id = ?)`;
+    params.push(req.user.id);
+  }
+  // Hiring Managers only see jobs they're explicitly attached to.
+  if (req.user.role === 'hiring_manager') {
+    cond += ` AND EXISTS (SELECT 1 FROM job_hiring_managers jhm
+                          WHERE jhm.job_id = j.id AND jhm.user_id = ?)`;
+    params.push(req.user.id);
+  }
+  if (status && status !== 'all') { cond += ' AND j.status = ?'; params.push(status); }
+  if (search) {
+    cond += ' AND (j.title LIKE ? OR j.client_name LIKE ? OR j.location LIKE ?)';
+    const s = `%${search}%`;
+    params.push(s, s, s);
+  }
+
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM jobs j WHERE j.company_id = ?${cond}`).get(...params).n;
+
   let q = `
     SELECT j.*,
            lead_user.display_name AS lead_name,
@@ -57,31 +80,22 @@ router.get('/', (req, res) => {
     LEFT JOIN job_assignees ja_lead
       ON ja_lead.job_id = j.id AND ja_lead.role_on_job = 'lead'
     LEFT JOIN users lead_user ON lead_user.id = ja_lead.user_id
-    WHERE j.company_id = ?
-  `;
-  const params = [req.user.company_id];
+    WHERE j.company_id = ?${cond}
+    ORDER BY j.created_at DESC`;
 
-  if (assigned_to === 'me') {
-    q += ` AND EXISTS (SELECT 1 FROM job_assignees ja
-                       WHERE ja.job_id = j.id AND ja.user_id = ?)`;
-    params.push(req.user.id);
+  // Pagination is opt-in: callers that pass ?limit get a page; others get all
+  // jobs (preserves existing behaviour for internal callers).
+  const qParams = [...params];
+  let page = 1, limit = null;
+  if (req.query.limit != null) {
+    limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 500);
+    page  = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    q += ' LIMIT ? OFFSET ?';
+    qParams.push(limit, (page - 1) * limit);
   }
-  // Hiring Managers only see jobs they're explicitly attached to.
-  if (req.user.role === 'hiring_manager') {
-    q += ` AND EXISTS (SELECT 1 FROM job_hiring_managers jhm
-                       WHERE jhm.job_id = j.id AND jhm.user_id = ?)`;
-    params.push(req.user.id);
-  }
-  if (status && status !== 'all') { q += ' AND j.status = ?'; params.push(status); }
-  if (search) {
-    q += ' AND (j.title LIKE ? OR j.client_name LIKE ? OR j.location LIKE ?)';
-    const s = `%${search}%`;
-    params.push(s, s, s);
-  }
-  q += ' ORDER BY j.created_at DESC';
 
-  const jobs = db.prepare(q).all(...params);
-  res.json({ jobs: jobs.map(parseJob) });
+  const jobs = db.prepare(q).all(...qParams);
+  res.json({ jobs: jobs.map(parseJob), total, page, limit: limit ?? total });
 });
 
 // GET /jobs/:id

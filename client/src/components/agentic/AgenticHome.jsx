@@ -57,14 +57,15 @@ export default function AgenticHome({ authFetch, isLight, onToggleTheme, onLogou
 
   useEffect(() => {
     Promise.all([
-      authFetch(`${BACKEND_URL}/jobs`).then(r => r.json()).catch(() => null),
-      authFetch(`${BACKEND_URL}/candidates`).then(r => r.json()).catch(() => null),
+      // limit=1 → we only need the `total`, not the rows
+      authFetch(`${BACKEND_URL}/jobs?status=active&limit=1`).then(r => r.json()).catch(() => null),
+      authFetch(`${BACKEND_URL}/candidates?limit=1`).then(r => r.json()).catch(() => null),
       authFetch(`${BACKEND_URL}/sessions`).then(r => r.json()).catch(() => null),
     ]).then(([jobsData, candidatesData, sessionsData]) => {
       const sessions = sessionsData?.sessions || [];
       setStats({
-        jobs:       jobsData?.jobs?.length       ?? 0,
-        candidates: candidatesData?.candidates?.length ?? 0,
+        jobs:       jobsData?.total       ?? jobsData?.jobs?.length       ?? 0,
+        candidates: candidatesData?.total ?? candidatesData?.candidates?.length ?? 0,
         sessions:   sessions.length,
       });
       setRecentSessions(sessions.slice(0, 5));
