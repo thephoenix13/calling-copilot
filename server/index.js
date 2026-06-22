@@ -47,6 +47,8 @@ const deepgramClient = process.env.DEEPGRAM_API_KEY
   : null;
 
 // ── Routes ──────────────────────────────────────────────────────────────────
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
 app.use('/auth',  require('./routes/auth'));
 app.use('/token', require('./routes/token'));
 app.use('/voice', require('./routes/voice'));
